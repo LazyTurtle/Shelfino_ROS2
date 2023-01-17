@@ -28,7 +28,7 @@ static const double RIGHT_RADIUS = 0.99 * 0.125 ; //0.99*0.125; //0.125138;
 static const double WHEEL_BASE = 0.383;
 static const double LEFT_B_D = 4* WHEEL_BASE / (2.*LEFT_RADIUS); 
 static const double RIGHT_B_D = 4* WHEEL_BASE / (2.*RIGHT_RADIUS); 
-static const double ENCODER_PPR = 36*4*2048;
+static const double ENCODER_PPR = 36*4*2048; // (Shelfino1) *1,376  | (Shelfino2) *1  | (Shelfino3) *?
 static const double RATIO_LEFT_RIGHT = RIGHT_B_D/LEFT_B_D;
 
 /**
