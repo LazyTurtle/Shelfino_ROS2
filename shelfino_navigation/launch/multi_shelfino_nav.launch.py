@@ -125,16 +125,18 @@ def generate_launch_description():
             executable='get_positions',
             namespace='shelfino1',
             remappings=[
-            ('/tf', 'tf')
-        ]),
+            ('/tf', 'tf')],
+            condition=UnlessCondition(remote),
+            ),
 
         Node(
             package='get_positions',
             executable='get_positions',
             namespace='shelfino2',
             remappings=[
-            ('/tf', 'tf')
-        ]),
+            ('/tf', 'tf')],
+            condition=UnlessCondition(remote),
+            ),
     ])
 
     

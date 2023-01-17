@@ -27,6 +27,10 @@ class PositionListener : public rclcpp::Node
     PositionListener()
     : Node("get_positions")
     {
+      tf_buffer_ =
+      std::make_unique<tf2_ros::Buffer>(this->get_clock());
+      tf_listener_ =
+      std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
       publisher_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("transform", 10);
       timer_ = this->create_wall_timer(
       500ms, std::bind(&PositionListener::timer_callback, this));
@@ -35,27 +39,19 @@ class PositionListener : public rclcpp::Node
   private:
     void timer_callback()
     {
-      std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
-      std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
-
-      tf_buffer_ =
-      std::make_unique<tf2_ros::Buffer>(this->get_clock());
-      tf_listener_ =
-      std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
-
       geometry_msgs::msg::TransformStamped t;
 
-      // Look up for the transformation between target_frame and turtle2 frames
-      // and send velocity commands for turtle2 to reach target_frame
       try {
           rclcpp::Time now = this->get_clock()->now();
-          t = tf_buffer_->lookupTransform("map", "base_link", tf2::TimePointZero, 20s);
+          t = tf_buffer_->lookupTransform("map", "base_link", tf2::TimePointZero, 10s);
       } catch (const tf2::TransformException & ex) {
-          RCLCPP_INFO(this->get_logger(), "Could not transform map to base_link: %s", ex.what());
-          return;
+          // RCLCPP_INFO(this->get_logger(), "Could not transform map to base_link: %s", ex.what());
+          // return;
       }
       publisher_->publish(t);
     }
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
+    std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr publisher_;
     size_t count_;
