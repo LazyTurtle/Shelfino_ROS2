@@ -10,7 +10,7 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 
 def generate_launch_description():
-    use_sim_time = LaunchConfiguration('use_sim_time', default='true')
+    use_sim_time = LaunchConfiguration('use_sim_time', default='false')
     launch_file_dir = os.path.join(get_package_share_directory('shelfino_description'), 'launch')
 
     remappings = [('/tf', 'tf'),

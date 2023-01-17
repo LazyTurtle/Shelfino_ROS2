@@ -44,21 +44,23 @@ class ShelfinoHWNode : public rclcpp::Node
     ShelfinoHWNode()
     : Node("shelfino_hw_publisher")
     {
+      auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
+
       // Load shelfino paths to communicate with ZMQ
       hp = std::make_unique<HardwareParameters>(R_ID_DEFAULT);
       HardwareGlobalInterface::initialize(hp.get());
       // ROS2 transform broadcaster
       tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
       // Creation of ROS2 publishers
-      lidar_publisher_ = this->create_publisher<sensor_msgs::msg::LaserScan>("scan", 10);
-      t265_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("t265", 10);
-      odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
-      encoders_publisher_ = this->create_publisher<sensor_msgs::msg::JointState>("joint_states", 10);
+      lidar_publisher_ = this->create_publisher<sensor_msgs::msg::LaserScan>("scan", qos);
+      t265_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("t265", qos);
+      odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", qos);
+      encoders_publisher_ = this->create_publisher<sensor_msgs::msg::JointState>("joint_states", qos);
       // Selectiong the callbacks for the publishers
       lidar_timer_ = this->create_wall_timer(100ms, std::bind(&ShelfinoHWNode::lidar_callback, this));
-      t265_timer_ = this->create_wall_timer(500ms, std::bind(&ShelfinoHWNode::t265_callback, this));
-      odom_timer_ = this->create_wall_timer(200ms, std::bind(&ShelfinoHWNode::odom_callback, this));
-      encoders_timer_ = this->create_wall_timer(200ms, std::bind(&ShelfinoHWNode::enc_callback, this));
+      t265_timer_ = this->create_wall_timer(100ms, std::bind(&ShelfinoHWNode::t265_callback, this));
+      odom_timer_ = this->create_wall_timer(100ms, std::bind(&ShelfinoHWNode::odom_callback, this));
+      encoders_timer_ = this->create_wall_timer(100ms, std::bind(&ShelfinoHWNode::enc_callback, this));
       // Creation of the CMD_VEL subscriber to move the shelfino
       cmd_subscription_ = this->create_subscription<geometry_msgs::msg::Twist>(
         "cmd_vel", 10, std::bind(&ShelfinoHWNode::handle_shelfino_cmd_vel, this, std::placeholders::_1));

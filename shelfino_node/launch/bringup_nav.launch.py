@@ -50,4 +50,12 @@ def generate_launch_description():
             PythonLaunchDescriptionSource([nav2_launch_file_dir, '/', robot_id, '_nav.launch.py']),
             launch_arguments={'remote': remote}.items()
         ),
+
+        Node(
+            package='get_positions',
+            executable='get_positions',
+            namespace=robot_id,
+            remappings=[
+            ('/tf', 'tf')
+        ]),
     ])
