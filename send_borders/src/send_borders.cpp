@@ -21,7 +21,8 @@ class BordersPublisher : public rclcpp::Node
     BordersPublisher()
     : Node("send_borders")
     {
-        publisher_ = this->create_publisher<geometry_msgs::msg::Polygon>("map_borders", 10);
+        auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
+        publisher_ = this->create_publisher<geometry_msgs::msg::Polygon>("map_borders", qos);
 
         std_msgs::msg::Header hh;
 
