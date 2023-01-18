@@ -138,20 +138,20 @@ def generate_launch_description():
             condition=UnlessCondition(remote),
             ),
 
-        Node(
-            package='send_obstacles',
-            executable='send_obstacles'
-        ),
+        # Node(
+        #     package='send_obstacles',
+        #     executable='send_obstacles'
+        # ),
 
-        Node(
-            package='send_borders',
-            executable='send_borders'
-        ),
+        # Node(
+        #     package='send_borders',
+        #     executable='send_borders'
+        # ),
 
-        Node(
-            package='send_gates',
-            executable='send_gates'
-        ),
+        # Node(
+        #     package='send_gates',
+        #     executable='send_gates'
+        # ),
     ])
 
     
