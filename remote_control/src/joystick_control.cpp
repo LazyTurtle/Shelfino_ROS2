@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <mutex>
+#include <unistd.h>
 
 #include "rclcpp/rclcpp.hpp"
 #include "geometry_msgs/msg/twist.hpp"
