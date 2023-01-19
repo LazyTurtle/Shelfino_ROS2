@@ -71,20 +71,20 @@ class ObstaclesPublisher : public rclcpp::Node
         // First square obstacle
         {
           std::vector<geometry_msgs::msg::Point32> points_temp;
-          point.x = 5;
-          point.y = 5;
+          point.x = -1;
+          point.y = -1;
           point.z = 0;
           points_temp.push_back(point);
-          point.x = 5;
-          point.y = 6;
+          point.x = -1;
+          point.y = -2;
           point.z = 0;
           points_temp.push_back(point);
-          point.x = 6;
-          point.y = 6;
+          point.x = -2;
+          point.y = -2;
           point.z = 0;
           points_temp.push_back(point);
-          point.x = 6;
-          point.y = 5;
+          point.x = -2;
+          point.y = -1;
           point.z = 0;
           points_temp.push_back(point);
           pol.points = points_temp;

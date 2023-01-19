@@ -1,0 +1,12 @@
+[Unit]
+Description=Service to manage the ROS2 interface layer for the shelfino
+After=network.target local-fs.target nss-lookup.target multi-user.target  sockets.target docker.service
+
+[Service]
+WorkingDirectory=/home/eecs/docker/ros2/scripts/
+ExecStart=/usr/bin/screen -dmS ros2 /bin/bash /home/eecs/docker/ros2/scripts/start_ros2.sh
+ExecStop=/bin/bash /home/eecs/docker/ros2/scripts/stop_ros2.sh
+Type=forking
+
+[Install]
+WantedBy=default.target
