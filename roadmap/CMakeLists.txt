@@ -10,9 +10,11 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(obstacles_msgs REQUIRED)
+
 
 add_executable(roadmap_manager src/roadmap_manager.cpp)
-ament_target_dependencies(roadmap_manager rclcpp std_msgs geometry_msgs)
+ament_target_dependencies(roadmap_manager rclcpp std_msgs geometry_msgs obstacles_msgs)
 
 target_include_directories(roadmap_manager PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
