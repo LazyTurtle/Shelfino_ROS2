@@ -14,18 +14,21 @@ class RoadmapManager : public rclcpp::Node
   public:
     RoadmapManager()
     : Node("RoadmapManager"){
-      subscription_ = this->create_subscription<geometry_msgs::msg::PolygonStamped>(
-      "borders", 10, std::bind(&RoadmapManager::topic_callback, this, _1));
+      border_subscriber = this->create_subscription<geometry_msgs::msg::PolygonStamped>(
+      "borders", 10, std::bind(&RoadmapManager::set_borders, this, _1));
+      
     }
 
   private:
-    void topic_callback(const geometry_msgs::msg::PolygonStamped::SharedPtr borders) const{
-      RCLCPP_INFO(this->get_logger(), "I heard it!");
-      std::ostringstream s;
-      s << borders.get()->header.stamp.sec;
-      RCLCPP_INFO(this->get_logger(), s.str());
+
+    void set_borders(const geometry_msgs::msg::PolygonStamped::SharedPtr msg){
+      borders = msg;
     }
-    rclcpp::Subscription<geometry_msgs::msg::PolygonStamped>::SharedPtr subscription_;
+
+    rclcpp::Subscription<geometry_msgs::msg::PolygonStamped>::SharedPtr border_subscriber;
+
+    std::shared_ptr<geometry_msgs::msg::PolygonStamped> borders;
+    
 };
 
 int main(int argc, char ** argv)
