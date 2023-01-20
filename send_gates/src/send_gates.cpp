@@ -20,7 +20,7 @@ class GatesPublisher : public rclcpp::Node
     : Node("send_gates")
     {
         auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
-        publisher_ = this->create_publisher<geometry_msgs::msg::PoseArray>("gate_position", qos);
+        publisher_ = this->create_publisher<geometry_msgs::msg::PoseArray>("gate_position", 1);
 
         std_msgs::msg::Header hh;
         geometry_msgs::msg::Pose pose;

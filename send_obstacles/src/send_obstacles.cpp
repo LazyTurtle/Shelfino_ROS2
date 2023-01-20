@@ -24,7 +24,7 @@ class ObstaclesPublisher : public rclcpp::Node
     : Node("obstacles_sender")
     {
         auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
-        publisher_ = this->create_publisher<obstacles_msgs::msg::ObstacleArrayMsg>("obstacles", qos);
+        publisher_ = this->create_publisher<obstacles_msgs::msg::ObstacleArrayMsg>("obstacles", 1);
 
         std_msgs::msg::Header hh;
 
