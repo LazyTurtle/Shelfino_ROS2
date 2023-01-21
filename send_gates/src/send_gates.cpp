@@ -12,6 +12,7 @@
 #include "geometry_msgs/msg/pose_array.hpp"
 #include "geometry_msgs/msg/pose.hpp"
 
+using namespace std::chrono_literals;
 
 class GatesPublisher : public rclcpp::Node
 {
@@ -19,47 +20,60 @@ class GatesPublisher : public rclcpp::Node
     GatesPublisher()
     : Node("send_gates")
     {
-        auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
-        publisher_ = this->create_publisher<geometry_msgs::msg::PoseArray>("gate_position", 1);
+      auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
+      publisher_ = this->create_publisher<geometry_msgs::msg::PoseArray>("gate_position", qos);
 
-        std_msgs::msg::Header hh;
-        geometry_msgs::msg::Pose pose;
-        std::vector<geometry_msgs::msg::Pose> pose_array_temp;
-        geometry_msgs::msg::PoseArray msg;
+      auto interval = 1000ms;
+      timer_ = this->create_wall_timer(interval, std::bind(&GatesPublisher::publish_gates, this));
 
-        hh.stamp = this->get_clock()->now();
-        hh.frame_id = "map";
+      gates_poses = create_gates();
 
-        msg.header = hh;
-
-         pose.position.x = -5;
-         pose.position.y = -2.5;
-         //pose.position.x = -2.81;
-         //pose.position.y = -4.46;
-         pose.position.z = 0;
-         pose.orientation.x = 0;
-         pose.orientation.y = 0;
-         pose.orientation.z = 0;
-         pose.orientation.w = 0;
-         pose_array_temp.push_back(pose);
-         pose.position.x = -4;
-         pose.position.y = 5;
-         //pose.position.x = -1.36;
-         //pose.position.y = -1.11;
-
-        pose_array_temp.push_back(pose);
-        msg.poses = pose_array_temp;
-
-        while(1){
-          publisher_->publish(msg);
-          usleep(1000000);
-        }
+      RCLCPP_INFO_STREAM(this->get_logger(), "Ready to publish the gates.");
     }
 
   
   private:
     
     rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr publisher_;
+    rclcpp::TimerBase::SharedPtr timer_;
+    geometry_msgs::msg::PoseArray gates_poses;
+
+    void publish_gates(){
+      std_msgs::msg::Header new_header;
+      new_header.stamp = this->now();
+      new_header.frame_id = "map";
+
+      gates_poses.header = new_header;
+      publisher_->publish(gates_poses);
+    }
+
+    geometry_msgs::msg::PoseArray create_gates(){
+      
+      geometry_msgs::msg::Pose pose;
+      std::vector<geometry_msgs::msg::Pose> pose_array_temp;
+      geometry_msgs::msg::PoseArray msg;
+
+      pose.position.x = -5;
+      pose.position.y = -2.5;
+      pose.position.z = 0;
+      pose.orientation.x = 0;
+      pose.orientation.y = 0;
+      pose.orientation.z = 0;
+      pose.orientation.w = 0;
+      pose_array_temp.push_back(pose);
+      pose.position.x = -4;
+      pose.position.y = 5;
+      pose.position.z = 0;
+      pose.orientation.x = 0;
+      pose.orientation.y = 0;
+      pose.orientation.z = 0;
+      pose.orientation.w = 0;
+      pose_array_temp.push_back(pose);
+      msg.poses = pose_array_temp;
+
+      return msg;
+    }
+
 };
 
 int main(int argc, char * argv[])
