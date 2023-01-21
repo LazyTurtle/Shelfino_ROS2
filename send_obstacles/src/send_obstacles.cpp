@@ -27,10 +27,14 @@ class ObstaclesPublisher : public rclcpp::Node
     {
         auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
         obstacle_array_pub = this->create_publisher<obstacles_msgs::msg::ObstacleArrayMsg>("obstacles", qos);
-        pub1 = this->create_publisher<geometry_msgs::msg::PolygonStamped>("obs1", qos);
-        pub2 = this->create_publisher<geometry_msgs::msg::PolygonStamped>("obs2", qos);
 
         obstacle_array = create_obstacles();
+
+        for(int i = 0; i<obstacle_array.obstacles.size(); i++){
+          std::ostringstream s;
+          s <<"obs"<<(i+1);
+          pubs.push_back(this->create_publisher<geometry_msgs::msg::PolygonStamped>(s.str(), qos));
+        }
 
         auto interval = 1000ms;
         timer_ = this->create_wall_timer(interval, std::bind(&ObstaclesPublisher::publish_obstacles, this));
@@ -41,9 +45,7 @@ class ObstaclesPublisher : public rclcpp::Node
   private:
     
     rclcpp::Publisher<obstacles_msgs::msg::ObstacleArrayMsg>::SharedPtr obstacle_array_pub;
-    rclcpp::Publisher<geometry_msgs::msg::PolygonStamped>::SharedPtr pub1;
-    rclcpp::Publisher<geometry_msgs::msg::PolygonStamped>::SharedPtr pub2;
-
+    std::vector<rclcpp::Publisher<geometry_msgs::msg::PolygonStamped>::SharedPtr> pubs;
 
     rclcpp::TimerBase::SharedPtr timer_;
     obstacles_msgs::msg::ObstacleArrayMsg obstacle_array;
@@ -56,16 +58,12 @@ class ObstaclesPublisher : public rclcpp::Node
       obstacle_array.header = new_header;
       obstacle_array_pub->publish(obstacle_array);
 
-      std::vector<geometry_msgs::msg::PolygonStamped> obstacles;
-      for(auto obs_msg:obstacle_array.obstacles){
+      for(int i = 0; i < obstacle_array.obstacles.size(); i++){
         geometry_msgs::msg::PolygonStamped poly;
         poly.header = new_header;
-        poly.polygon = obs_msg.polygon;
-        obstacles.push_back(poly);
+        poly.polygon = obstacle_array.obstacles[i].polygon;
+        pubs[i]->publish(poly);
       }
-      pub1->publish(obstacles[0]);
-      pub2->publish(obstacles[1]);
-
     }
 
     obstacles_msgs::msg::ObstacleArrayMsg create_obstacles(){
@@ -141,6 +139,35 @@ class ObstaclesPublisher : public rclcpp::Node
 
       return msg;
     }
+
+    obstacles_msgs::msg::ObstacleMsg build_square_obs(float x, float y, float l){
+      obstacles_msgs::msg::ObstacleMsg obs;
+      geometry_msgs::msg::Polygon pol;
+      geometry_msgs::msg::Point32 point;
+      std::vector<geometry_msgs::msg::Point32> points_temp;
+      point.x = x-l/2;
+      point.y = y+l/2;
+      point.z = 0;
+      points_temp.push_back(point);
+      point.x = x+l/2;
+      point.y = y+l/2;
+      point.z = 0;
+      points_temp.push_back(point);
+      point.x = x+l/2;
+      point.y = y-l/2;
+      point.z = 0;
+      points_temp.push_back(point);
+      point.x = x-l/2;
+      point.y = y-l/2;
+      point.z = 0;
+      points_temp.push_back(point);
+
+      pol.points = points_temp;
+      obs.polygon = pol;
+
+      return obs;
+    }
+    
 
 
 };
