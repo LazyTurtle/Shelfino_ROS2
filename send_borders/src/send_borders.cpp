@@ -29,7 +29,7 @@ class BordersPublisher : public rclcpp::Node
         timer_ = this->create_wall_timer(interval, std::bind(&BordersPublisher::publish_borders, this));
         
         borders = get_borders();
-
+        RCLCPP_INFO_STREAM(this->get_logger(), "Ready to publish borders.");
     }
 
   

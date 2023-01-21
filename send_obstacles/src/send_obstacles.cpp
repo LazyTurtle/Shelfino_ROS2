@@ -38,7 +38,7 @@ class ObstaclesPublisher : public rclcpp::Node
 
         auto interval = 1000ms;
         timer_ = this->create_wall_timer(interval, std::bind(&ObstaclesPublisher::publish_obstacles, this));
-
+        RCLCPP_INFO_STREAM(this->get_logger(), "Ready to publish obstacles.");
     }
 
   
@@ -74,67 +74,15 @@ class ObstaclesPublisher : public rclcpp::Node
       hh.frame_id = "map";
 
       obstacles_msgs::msg::ObstacleArrayMsg msg;
-      obstacles_msgs::msg::ObstacleMsg obs;
       std::vector<obstacles_msgs::msg::ObstacleMsg> obs_temp;
-      geometry_msgs::msg::Polygon pol;
-      geometry_msgs::msg::Point32 point;
 
-      geometry_msgs::msg::PolygonStamped pol1;
-      geometry_msgs::msg::PolygonStamped pol2;
+      obs_temp.push_back(build_square_obs(0.5,0.5,1.0));
+      obs_temp.push_back(build_square_obs(-1.5,-1.5,1.0));
+      obs_temp.push_back(build_square_obs(2,2,0.6));
+      obs_temp.push_back(build_square_obs(-2,3,1.4));
+      obs_temp.push_back(build_square_obs(3,-3.5,1.2));
 
-      pol1.header = hh;
-      pol2.header = hh;
-
-      // First square obstacle
-      {
-        std::vector<geometry_msgs::msg::Point32> points_temp;
-        point.x = 0;
-        point.y = 0;
-        point.z = 0;
-        points_temp.push_back(point);
-        point.x = 0;
-        point.y = 1;
-        point.z = 0;
-        points_temp.push_back(point);
-        point.x = 1;
-        point.y = 1;
-        point.z = 0;
-        points_temp.push_back(point);
-        point.x = 1;
-        point.y = 0;
-        point.z = 0;
-        points_temp.push_back(point);
-        pol.points = points_temp;
-        obs.polygon = pol;
-        obs_temp.push_back(obs);
-        pol1.polygon = pol;
-      }
-
-      // second square obstacle
-      {
-        std::vector<geometry_msgs::msg::Point32> points_temp;
-        point.x = -1;
-        point.y = -1;
-        point.z = 0;
-        points_temp.push_back(point);
-        point.x = -1;
-        point.y = -2;
-        point.z = 0;
-        points_temp.push_back(point);
-        point.x = -2;
-        point.y = -2;
-        point.z = 0;
-        points_temp.push_back(point);
-        point.x = -2;
-        point.y = -1;
-        point.z = 0;
-        points_temp.push_back(point);
-        pol.points = points_temp;
-        obs.polygon = pol;
-        obs_temp.push_back(obs);
-        pol2.polygon = pol;
-      }
-
+      msg.header = hh;
       msg.obstacles = obs_temp;
 
       return msg;
