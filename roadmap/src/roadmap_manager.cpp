@@ -112,13 +112,6 @@ class RoadmapManager : public rclcpp::Node
       marker.id = 0;
       marker.action = visualization_msgs::msg::Marker::ADD;
       marker.type = visualization_msgs::msg::Marker::LINE_LIST;
-      marker.pose.position.x = 0;
-      marker.pose.position.y = 0;
-      marker.pose.position.z = 0;
-      marker.pose.orientation.x = 0.0;
-      marker.pose.orientation.y = 0.0;
-      marker.pose.orientation.z = 0.0;
-      marker.pose.orientation.w = 1.0;
       marker.scale.x = 0.1;
       marker.scale.y = 0.1;
       marker.scale.z = 0.1;
