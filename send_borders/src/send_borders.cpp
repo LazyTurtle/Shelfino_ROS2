@@ -14,6 +14,7 @@
 #include "geometry_msgs/msg/polygon_stamped.hpp"
 #include "std_msgs/msg/header.hpp"
 
+using namespace std::chrono_literals;
 
 class BordersPublisher : public rclcpp::Node
 {
@@ -22,53 +23,65 @@ class BordersPublisher : public rclcpp::Node
     : Node("send_borders")
     {
         auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
-        publisher_ = this->create_publisher<geometry_msgs::msg::Polygon>("map_borders", 1);
+        publisher_ = this->create_publisher<geometry_msgs::msg::PolygonStamped>("map_borders", qos);
 
-        std_msgs::msg::Header hh;
+        auto interval = 1000ms;
+        timer_ = this->create_wall_timer(interval, std::bind(&BordersPublisher::publish_borders, this));
+        
+        borders = get_borders();
 
-        hh.stamp = this->get_clock()->now();
-        hh.frame_id = "map";
-
-        geometry_msgs::msg::Polygon pol;
-        geometry_msgs::msg::Point32 point;
-
-        geometry_msgs::msg::PolygonStamped pol1;
-
-        pol1.header = hh;
-
-        std::vector<geometry_msgs::msg::Point32> points_temp;
-        point.x = -5; // -2.5;
-        point.y = -5; // -5;
-        point.z = 0;
-        points_temp.push_back(point);
-        point.x = -5; //-3.86;
-        point.y = 5; //-2.6;
-        point.z = 0;
-        points_temp.push_back(point);
-        point.x = 5; //1.84;
-        point.y = 5; //0.794;
-        point.z = 0;
-        points_temp.push_back(point);
-        point.x = 5; //3.29;
-        point.y = -5; //-1.55;
-        point.z = 0;
-        points_temp.push_back(point);
-        pol.points = points_temp;
-        pol1.polygon = pol;
-
-        rclcpp::Publisher<geometry_msgs::msg::PolygonStamped>::SharedPtr pub = this->create_publisher<geometry_msgs::msg::PolygonStamped>("borders", 10);
-
-        while(1){
-          publisher_->publish(pol);
-          pub->publish(pol1);
-          usleep(1000000);
-        }
     }
 
   
   private:
     
-    rclcpp::Publisher<geometry_msgs::msg::Polygon>::SharedPtr publisher_;
+    rclcpp::Publisher<geometry_msgs::msg::PolygonStamped>::SharedPtr publisher_;
+    rclcpp::TimerBase::SharedPtr timer_;
+    geometry_msgs::msg::PolygonStamped borders;
+
+    void publish_borders(){
+      borders.header.stamp = this->now();
+      publisher_->publish(borders);
+    }
+
+    geometry_msgs::msg::PolygonStamped get_borders(){
+      std_msgs::msg::Header hh;
+
+      hh.stamp = this->get_clock()->now();
+      hh.frame_id = "map";
+
+      geometry_msgs::msg::Polygon pol;
+      geometry_msgs::msg::Point32 point;
+
+      geometry_msgs::msg::PolygonStamped pol1;
+
+      pol1.header = hh;
+
+      std::vector<geometry_msgs::msg::Point32> points_temp;
+      point.x = -5;
+      point.y = -5;
+      point.z = 0;
+      points_temp.push_back(point);
+      point.x = -5;
+      point.y = 5;
+      point.z = 0;
+      points_temp.push_back(point);
+      point.x = 5;
+      point.y = 5;
+      point.z = 0;
+      points_temp.push_back(point);
+      point.x = 5;
+      point.y = -5;
+      point.z = 0;
+      points_temp.push_back(point);
+      pol.points = points_temp;
+      pol1.polygon = pol;
+
+      return pol1;
+    }
+    
+
+
 };
 
 int main(int argc, char * argv[])
