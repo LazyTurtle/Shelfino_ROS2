@@ -20,8 +20,7 @@ class GatesPublisher : public rclcpp::Node
     GatesPublisher()
     : Node("send_gates")
     {
-      auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
-      publisher_ = this->create_publisher<geometry_msgs::msg::PoseArray>("gate_position", qos);
+      publisher_ = this->create_publisher<geometry_msgs::msg::PoseArray>("gate_position", 1);
 
       auto interval = 1000ms;
       timer_ = this->create_wall_timer(interval, std::bind(&GatesPublisher::publish_gates, this));
