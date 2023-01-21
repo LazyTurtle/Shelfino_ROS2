@@ -43,7 +43,8 @@ class RoadmapManager : public rclcpp::Node
       test_service = this->create_service<std_srvs::srv::Empty>(
         "test_service", std::bind(&RoadmapManager::test, this, _1, _2));
 
-      diagram_publisher = this->create_publisher<visualization_msgs::msg::Marker>("voronoi_diagram", 1);
+      diagram_publisher = this->create_publisher<visualization_msgs::msg::Marker>(
+        "voronoi_diagram", 1);
       timer_ = this->create_wall_timer(1000ms, std::bind(&RoadmapManager::publish_diagram, this));
 
       
