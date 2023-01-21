@@ -32,7 +32,7 @@ class RoadmapManager : public rclcpp::Node
     RoadmapManager()
     : Node("RoadmapManager"){
       border_subscriber = this->create_subscription<geometry_msgs::msg::PolygonStamped>(
-      "borders", 1, std::bind(&RoadmapManager::set_borders, this, _1));
+      "map_borders", 1, std::bind(&RoadmapManager::set_borders, this, _1));
       
       obstacles_subscriber = this->create_subscription<obstacles_msgs::msg::ObstacleArrayMsg>(
       "obstacles", 1, std::bind(&RoadmapManager::set_obstacles, this, _1));
@@ -45,12 +45,37 @@ class RoadmapManager : public rclcpp::Node
 
       diagram_publisher = this->create_publisher<visualization_msgs::msg::Marker>(
         "voronoi_diagram", 1);
-      timer_ = this->create_wall_timer(1000ms, std::bind(&RoadmapManager::publish_diagram, this));
+
+      auto interval = 1000ms;
+      timer_ = this->create_wall_timer(interval, std::bind(&RoadmapManager::publish_diagram, this));
 
       
     }
 
   private:
+
+    rclcpp::Subscription<geometry_msgs::msg::PolygonStamped>::SharedPtr border_subscriber;
+    rclcpp::Subscription<obstacles_msgs::msg::ObstacleArrayMsg>::SharedPtr obstacles_subscriber;
+
+    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr diagram_publisher;
+    rclcpp::TimerBase::SharedPtr timer_;
+
+
+    rclcpp::Service<roadmap_interfaces::srv::PathService>::SharedPtr path_service;
+    rclcpp::Service<std_srvs::srv::Empty>::SharedPtr test_service;
+
+    std::shared_ptr<geometry_msgs::msg::PolygonStamped> borders_ptr;
+    std::shared_ptr<obstacles_msgs::msg::ObstacleArrayMsg> obstacles_ptr;
+
+    voronoi_diagram<double> vd;
+    bool bIsDiagramReady = false;
+
+    void log(std::string log_str){
+      RCLCPP_INFO(this->get_logger(), log_str);
+    }
+    void log(std::ostringstream log_str){
+      log(log_str.str());
+    }
 
     void set_borders(const geometry_msgs::msg::PolygonStamped::SharedPtr msg){
       borders_ptr = msg;
@@ -65,37 +90,42 @@ class RoadmapManager : public rclcpp::Node
       std::shared_ptr<std_srvs::srv::Empty_Response> response){
 
       std::vector<BoostSegment> segments;
-      printf("a\n");
+      std::vector<BoostPoint> points;
+
       auto border = borders_ptr->polygon;
       {
         for(int i = 0; i<border.points.size()-1; i++){
           BoostPoint a(border.points[i].x,border.points[i].y);
           BoostPoint b(border.points[i+1].x,border.points[i+1].y);
           segments.push_back(BoostSegment(a, b));
+          points.push_back(a);
         }
         BoostPoint a(border.points.back().x,border.points.back().y);
         BoostPoint b(border.points[0].x,border.points[0].y);
         segments.push_back(BoostSegment(a, b));
+        points.push_back(a);
       }
-      printf("b\n");
+
       auto obstacles = obstacles_ptr->obstacles;
-      printf("c\n");
       {
         for(auto& obs:obstacles){
-          printf("d\n");
           for(int i = 0; i<obs.polygon.points.size()-1; i++){
             BoostPoint a(obs.polygon.points[i].x, obs.polygon.points[i].y);
             BoostPoint b(obs.polygon.points[i+1].x, obs.polygon.points[i+1].y);
             segments.push_back(BoostSegment(a, b));
+            points.push_back(a);
           }
           BoostPoint a(obs.polygon.points.back().x, obs.polygon.points.back().y);
           BoostPoint b(obs.polygon.points[0].x, obs.polygon.points[0].y);
           segments.push_back(BoostSegment(a, b));
+          points.push_back(a);
         }
       }
 
-      boost::polygon::construct_voronoi(segments.begin(), segments.end(), &vd);
-      printf("e\n");
+      vd.clear();
+      boost::polygon::construct_voronoi(
+        points.begin(), points.end(), segments.begin(), segments.end(), &vd);
+      bIsDiagramReady = true;
       
     }
 
@@ -106,6 +136,9 @@ class RoadmapManager : public rclcpp::Node
     }
 
     void publish_diagram(){
+      if(!bIsDiagramReady)
+        return;
+        
       visualization_msgs::msg::Marker marker;
 
       marker.header.stamp = this->now();
@@ -136,25 +169,10 @@ class RoadmapManager : public rclcpp::Node
 
         }
       }
-      printf("%d", result);
+      log(std::to_string(result));
 
       diagram_publisher->publish(marker);
     }
-
-    rclcpp::Subscription<geometry_msgs::msg::PolygonStamped>::SharedPtr border_subscriber;
-    rclcpp::Subscription<obstacles_msgs::msg::ObstacleArrayMsg>::SharedPtr obstacles_subscriber;
-
-    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr diagram_publisher;
-    rclcpp::TimerBase::SharedPtr timer_;
-
-
-    rclcpp::Service<roadmap_interfaces::srv::PathService>::SharedPtr path_service;
-    rclcpp::Service<std_srvs::srv::Empty>::SharedPtr test_service;
-
-    std::shared_ptr<geometry_msgs::msg::PolygonStamped> borders_ptr;
-    std::shared_ptr<obstacles_msgs::msg::ObstacleArrayMsg> obstacles_ptr;
-
-    voronoi_diagram<double> vd;
 
     
 };
