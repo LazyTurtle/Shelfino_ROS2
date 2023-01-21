@@ -4,6 +4,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "std_srvs/srv/empty.hpp"
 #include "roadmap_interfaces/srv/path_service.hpp"
+#include "visualization_msgs/msg/marker.hpp"  
 
 #include "geometry_msgs/msg/point32.hpp"
 #include "geometry_msgs/msg/polygon.hpp"
@@ -23,6 +24,8 @@ using boost::polygon::voronoi_diagram;
 typedef boost::polygon::point_data<float> BoostPoint;
 typedef boost::polygon::segment_data<float> BoostSegment;
 
+using namespace std::chrono_literals;
+
 class RoadmapManager : public rclcpp::Node
 {
   public:
@@ -39,6 +42,10 @@ class RoadmapManager : public rclcpp::Node
 
       test_service = this->create_service<std_srvs::srv::Empty>(
         "test_service", std::bind(&RoadmapManager::test, this, _1, _2));
+
+      diagram_publisher = this->create_publisher<visualization_msgs::msg::Marker>("voronoi_diagram", 1);
+      timer_ = this->create_wall_timer(1000ms, std::bind(&RoadmapManager::publish_diagram, this));
+
       
     }
 
@@ -85,8 +92,7 @@ class RoadmapManager : public rclcpp::Node
           segments.push_back(BoostSegment(a, b));
         }
       }
-      
-      voronoi_diagram<double> vd;
+
       boost::polygon::construct_voronoi(segments.begin(), segments.end(), &vd);
       printf("e\n");
       
@@ -98,13 +104,63 @@ class RoadmapManager : public rclcpp::Node
         response->result = false;
     }
 
+    void publish_diagram(){
+      visualization_msgs::msg::Marker marker;
+
+      marker.header.stamp = this->now();
+      marker.header.frame_id = "map";
+      marker.id = 0;
+      marker.action = visualization_msgs::msg::Marker::ADD;
+      marker.type = visualization_msgs::msg::Marker::LINE_LIST;
+      marker.pose.position.x = 0;
+      marker.pose.position.y = 0;
+      marker.pose.position.z = 0;
+      marker.pose.orientation.x = 0.0;
+      marker.pose.orientation.y = 0.0;
+      marker.pose.orientation.z = 0.0;
+      marker.pose.orientation.w = 1.0;
+      marker.scale.x = 0.1;
+      marker.scale.y = 0.1;
+      marker.scale.z = 0.1;
+      marker.color.a = 1.0;
+      marker.color.r = 0.0;
+      marker.color.g = 1.0;
+      marker.color.b = 0.0;
+
+      int result = 0;
+      for (voronoi_diagram<double>::const_edge_iterator it = vd.edges().begin();
+          it != vd.edges().end(); ++it) {
+        if (it->is_primary()){
+          ++result;
+          geometry_msgs::msg::Point a, b;
+          a.x = it->vertex0()->x();
+          a.y = it->vertex0()->y();
+          marker.points.push_back(a);
+          b.x = it->vertex1()->x();
+          b.y = it->vertex1()->y();
+          marker.points.push_back(b);
+
+        }
+      }
+      printf("%d", result);
+
+      diagram_publisher->publish(marker);
+    }
+
     rclcpp::Subscription<geometry_msgs::msg::PolygonStamped>::SharedPtr border_subscriber;
     rclcpp::Subscription<obstacles_msgs::msg::ObstacleArrayMsg>::SharedPtr obstacles_subscriber;
+
+    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr diagram_publisher;
+    rclcpp::TimerBase::SharedPtr timer_;
+
+
     rclcpp::Service<roadmap_interfaces::srv::PathService>::SharedPtr path_service;
     rclcpp::Service<std_srvs::srv::Empty>::SharedPtr test_service;
 
     std::shared_ptr<geometry_msgs::msg::PolygonStamped> borders_ptr;
     std::shared_ptr<obstacles_msgs::msg::ObstacleArrayMsg> obstacles_ptr;
+
+    voronoi_diagram<double> vd;
 
     
 };

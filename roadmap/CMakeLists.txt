@@ -13,9 +13,10 @@ find_package(std_srvs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(obstacles_msgs REQUIRED)
 find_package(roadmap_interfaces REQUIRED)
+find_package(visualization_msgs REQUIRED)
 
 add_executable(roadmap_manager src/roadmap_manager.cpp)
-ament_target_dependencies(roadmap_manager rclcpp std_msgs geometry_msgs obstacles_msgs roadmap_interfaces std_srvs)
+ament_target_dependencies(roadmap_manager rclcpp std_msgs geometry_msgs obstacles_msgs roadmap_interfaces std_srvs visualization_msgs)
 
 target_include_directories(roadmap_manager PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
