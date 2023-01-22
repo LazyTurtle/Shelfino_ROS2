@@ -21,8 +21,8 @@ using std::placeholders::_2;
 using boost::polygon::voronoi_builder;
 using boost::polygon::voronoi_diagram;
 
-typedef boost::polygon::point_data<float> BoostPoint;
-typedef boost::polygon::segment_data<float> BoostSegment;
+typedef boost::polygon::point_data<int> BoostPoint;
+typedef boost::polygon::segment_data<int> BoostSegment;
 
 using namespace std::chrono_literals;
 
@@ -68,6 +68,7 @@ class RoadmapManager : public rclcpp::Node
     std::shared_ptr<obstacles_msgs::msg::ObstacleArrayMsg> obstacles_ptr;
 
     voronoi_diagram<double> vd;
+    int scale = 1000;
     bool bIsDiagramReady = false;
 
     void log(std::string log_str){
@@ -88,44 +89,60 @@ class RoadmapManager : public rclcpp::Node
     void test(
       const std::shared_ptr<std_srvs::srv::Empty_Request> request,
       std::shared_ptr<std_srvs::srv::Empty_Response> response){
+      
+      if(!borders_ptr || !obstacles_ptr){
+        log("Pointers not ready.");
+        return;
+      }
 
       std::vector<BoostSegment> segments;
-      std::vector<BoostPoint> points;
+      //std::vector<BoostPoint> points;
 
       auto border = borders_ptr->polygon;
       {
         for(int i = 0; i<border.points.size()-1; i++){
-          BoostPoint a(border.points[i].x,border.points[i].y);
-          BoostPoint b(border.points[i+1].x,border.points[i+1].y);
+          auto tx = border.points[i].x;
+          auto ty = border.points[i].y;
+          BoostPoint a(tx*scale,ty*scale);
+          tx = border.points[i+1].x;
+          ty = border.points[i+1].y;
+          BoostPoint b(tx*scale,ty*scale);
           segments.push_back(BoostSegment(a, b));
-          points.push_back(a);
+          //points.push_back(a);
         }
-        BoostPoint a(border.points.back().x,border.points.back().y);
-        BoostPoint b(border.points[0].x,border.points[0].y);
+        auto tx = border.points.back().x;
+        auto ty = border.points.back().y;
+        BoostPoint a(tx*scale,ty*scale);
+        tx = border.points[0].x;
+        ty = border.points[0].y;
+        BoostPoint b(tx*scale,ty*scale);
         segments.push_back(BoostSegment(a, b));
-        points.push_back(a);
+        //points.push_back(a);
       }
 
       auto obstacles = obstacles_ptr->obstacles;
       {
         for(auto& obs:obstacles){
           for(int i = 0; i<obs.polygon.points.size()-1; i++){
-            BoostPoint a(obs.polygon.points[i].x, obs.polygon.points[i].y);
-            BoostPoint b(obs.polygon.points[i+1].x, obs.polygon.points[i+1].y);
+            BoostPoint a(obs.polygon.points[i].x*scale, obs.polygon.points[i].y*scale);
+            BoostPoint b(obs.polygon.points[i+1].x*scale, obs.polygon.points[i+1].y*scale);
             segments.push_back(BoostSegment(a, b));
-            points.push_back(a);
+            //points.push_back(a);
           }
-          BoostPoint a(obs.polygon.points.back().x, obs.polygon.points.back().y);
-          BoostPoint b(obs.polygon.points[0].x, obs.polygon.points[0].y);
+          BoostPoint a(obs.polygon.points.back().x*scale, obs.polygon.points.back().y*scale);
+          BoostPoint b(obs.polygon.points[0].x*scale, obs.polygon.points[0].y*scale);
           segments.push_back(BoostSegment(a, b));
-          points.push_back(a);
+          //points.push_back(a);
         }
       }
 
       vd.clear();
       boost::polygon::construct_voronoi(
-        points.begin(), points.end(), segments.begin(), segments.end(), &vd);
+        //points.begin(), points.end(), segments.begin(), segments.end(), &vd);
+        segments.begin(), segments.end(), &vd);
+      
       bIsDiagramReady = true;
+      
       
     }
 
@@ -157,14 +174,18 @@ class RoadmapManager : public rclcpp::Node
       int result = 0;
       for (voronoi_diagram<double>::const_edge_iterator it = vd.edges().begin();
           it != vd.edges().end(); ++it) {
-        if (it->is_primary()){
+        if (it->is_primary() && it->is_finite()){
           ++result;
           geometry_msgs::msg::Point a, b;
-          a.x = it->vertex0()->x();
-          a.y = it->vertex0()->y();
+          auto tx = it->vertex0()->x();
+          auto ty = it->vertex0()->y();
+          a.x = tx/scale;
+          a.y = ty/scale;
           marker.points.push_back(a);
-          b.x = it->vertex1()->x();
-          b.y = it->vertex1()->y();
+          tx = it->vertex1()->x();
+          ty = it->vertex1()->y();
+          b.x = tx/scale;
+          b.y = ty/scale;
           marker.points.push_back(b);
 
         }
