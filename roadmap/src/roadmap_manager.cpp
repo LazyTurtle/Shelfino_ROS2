@@ -22,8 +22,8 @@ using std::placeholders::_2;
 using boost::polygon::voronoi_builder;
 using boost::polygon::voronoi_diagram;
 
-typedef boost::polygon::point_data<int> BoostPoint;
-typedef boost::polygon::segment_data<int> BoostSegment;
+typedef boost::polygon::point_data<double> BoostPoint;
+typedef boost::polygon::segment_data<double> BoostSegment;
 
 using namespace std::chrono_literals;
 
@@ -72,15 +72,12 @@ class RoadmapManager : public rclcpp::Node
     std::vector<BoostSegment> segments_data;
     std::vector<BoostPoint> points_data;
 
-    int scale = 1000;
-    int discretization = 0.5 * scale;
+    int scale = 100;
+    int discretization = 0.2 * scale;
     bool bIsDiagramReady = false;
 
     void log(std::string log_str){
       RCLCPP_INFO(this->get_logger(), log_str);
-    }
-    void log(std::ostringstream log_str){
-      log(log_str.str());
     }
 
     void set_borders(const geometry_msgs::msg::PolygonStamped::SharedPtr msg){
@@ -216,8 +213,23 @@ class RoadmapManager : public rclcpp::Node
               retrieve_segment(*edge.twin()->cell()) :
               retrieve_segment(*edge.cell());
             
-            boost::polygon::voronoi_visual_utils<int>::discretize(
+            boost::polygon::voronoi_visual_utils<double>::discretize(
             point, segment, discretization, &points);
+            std::ostringstream s;
+            s << points.size();
+            log(s.str());
+
+            for(int i = 0; i<points.size()-1; i++){
+              auto a = points[i];
+              auto b = points[i+1];
+              geometry_msgs::msg::Point ma, mb;
+              ma.x = a.x()/scale;
+              ma.y = a.y()/scale;
+              mb.x = b.x()/scale;
+              mb.y = b.y()/scale;
+              marker.points.push_back(ma);
+              marker.points.push_back(mb);
+            }
           }
 
         }
