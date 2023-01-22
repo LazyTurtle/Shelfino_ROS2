@@ -69,7 +69,11 @@ class RoadmapManager : public rclcpp::Node
     std::shared_ptr<obstacles_msgs::msg::ObstacleArrayMsg> obstacles_ptr;
 
     voronoi_diagram<double> vd;
+    std::vector<BoostSegment> segments_data;
+    std::vector<BoostPoint> points_data;
+
     int scale = 1000;
+    int discretization = 0.5 * scale;
     bool bIsDiagramReady = false;
 
     void log(std::string log_str){
@@ -96,8 +100,8 @@ class RoadmapManager : public rclcpp::Node
         return;
       }
 
-      std::vector<BoostSegment> segments;
-      //std::vector<BoostPoint> points;
+      segments_data.clear();
+      points_data.clear();
 
       auto border = borders_ptr->polygon;
       {
@@ -108,8 +112,10 @@ class RoadmapManager : public rclcpp::Node
           tx = border.points[i+1].x;
           ty = border.points[i+1].y;
           BoostPoint b(tx*scale,ty*scale);
-          segments.push_back(BoostSegment(a, b));
-          //points.push_back(a);
+          BoostSegment segment(a, b);
+
+          segments_data.push_back(segment);
+          points_data.push_back(low(segment));
         }
         auto tx = border.points.back().x;
         auto ty = border.points.back().y;
@@ -117,8 +123,10 @@ class RoadmapManager : public rclcpp::Node
         tx = border.points[0].x;
         ty = border.points[0].y;
         BoostPoint b(tx*scale,ty*scale);
-        segments.push_back(BoostSegment(a, b));
-        //points.push_back(a);
+        BoostSegment segment(a, b);
+
+        segments_data.push_back(segment);
+        points_data.push_back(low(segment));
       }
 
       auto obstacles = obstacles_ptr->obstacles;
@@ -127,20 +135,22 @@ class RoadmapManager : public rclcpp::Node
           for(int i = 0; i<obs.polygon.points.size()-1; i++){
             BoostPoint a(obs.polygon.points[i].x*scale, obs.polygon.points[i].y*scale);
             BoostPoint b(obs.polygon.points[i+1].x*scale, obs.polygon.points[i+1].y*scale);
-            segments.push_back(BoostSegment(a, b));
-            //points.push_back(a);
+            BoostSegment segment(a, b);
+            segments_data.push_back(segment);
+            points_data.push_back(low(segment));
           }
           BoostPoint a(obs.polygon.points.back().x*scale, obs.polygon.points.back().y*scale);
           BoostPoint b(obs.polygon.points[0].x*scale, obs.polygon.points[0].y*scale);
-          segments.push_back(BoostSegment(a, b));
-          //points.push_back(a);
+          BoostSegment segment(a, b);
+          segments_data.push_back(segment);
+          points_data.push_back(low(segment));
         }
       }
 
       vd.clear();
       boost::polygon::construct_voronoi(
-        //points.begin(), points.end(), segments.begin(), segments.end(), &vd);
-        segments.begin(), segments.end(), &vd);
+        points_data.begin(), points_data.end(),
+        segments_data.begin(), segments_data.end(), &vd);
       
       bIsDiagramReady = true;
       
@@ -173,21 +183,43 @@ class RoadmapManager : public rclcpp::Node
       marker.color.b = 0.0;
 
       int result = 0;
-      for (voronoi_diagram<double>::const_edge_iterator it = vd.edges().begin();
-          it != vd.edges().end(); ++it) {
+      for (voronoi_diagram<double>::const_edge_iterator it = vd.edges().begin(); it != vd.edges().end(); ++it) {
+        
         if (it->is_primary() && it->is_finite()){
           ++result;
-          geometry_msgs::msg::Point a, b;
-          auto tx = it->vertex0()->x();
-          auto ty = it->vertex0()->y();
-          a.x = tx/scale;
-          a.y = ty/scale;
-          marker.points.push_back(a);
-          tx = it->vertex1()->x();
-          ty = it->vertex1()->y();
-          b.x = tx/scale;
-          b.y = ty/scale;
-          marker.points.push_back(b);
+          if(it->is_linear()){
+            geometry_msgs::msg::Point a, b;
+            auto tx = it->vertex0()->x();
+            auto ty = it->vertex0()->y();
+            a.x = tx/scale;
+            a.y = ty/scale;
+            marker.points.push_back(a);
+            tx = it->vertex1()->x();
+            ty = it->vertex1()->y();
+            b.x = tx/scale;
+            b.y = ty/scale;
+            marker.points.push_back(b);
+          }else{
+            // is curved
+            std::vector<BoostPoint> points;
+            BoostPoint vertex0(it->vertex0()->x(), it->vertex0()->y());
+            points.push_back(vertex0);
+            BoostPoint vertex1(it->vertex1()->x(), it->vertex1()->y());
+            points.push_back(vertex1);
+
+            boost::polygon::voronoi_edge<double> edge = *it;
+
+            BoostPoint point = edge.cell()->contains_point() ?
+              retrieve_point(*edge.cell()) :
+              retrieve_point(*edge.twin()->cell());
+            BoostSegment segment = edge.cell()->contains_point() ?
+              retrieve_segment(*edge.twin()->cell()) :
+              retrieve_segment(*edge.cell());
+            
+            boost::polygon::voronoi_visual_utils<int>::discretize(
+            point, segment, discretization, &points);
+          }
+
         }
       }
       log(std::to_string(result));
@@ -195,6 +227,24 @@ class RoadmapManager : public rclcpp::Node
       diagram_publisher->publish(marker);
     }
 
+    BoostPoint retrieve_point(const boost::polygon::voronoi_cell<double>& cell) {
+      auto index = cell.source_index();
+      auto category = cell.source_category();
+      if (category == boost::polygon::SOURCE_CATEGORY_SINGLE_POINT) {
+        return points_data[index];
+      }
+      index -= points_data.size();
+      if (category == boost::polygon::SOURCE_CATEGORY_SEGMENT_START_POINT) {
+        return low(segments_data[index]);
+      } else {
+        return high(segments_data[index]);
+      }
+    }
+
+    BoostSegment retrieve_segment(const boost::polygon::voronoi_cell<double>& cell) {
+      auto index = cell.source_index() - points_data.size();
+      return segments_data[index];
+    }
     
 };
 
