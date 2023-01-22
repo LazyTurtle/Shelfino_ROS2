@@ -17,6 +17,7 @@ using std::placeholders::_2;
 #include "boost/polygon/polygon.hpp"
 #include "boost/polygon/point_data.hpp"
 #include "boost/polygon/segment_data.hpp"
+#include "voronoi_visualization_utils.hpp"
 
 using boost::polygon::voronoi_builder;
 using boost::polygon::voronoi_diagram;
@@ -187,7 +188,6 @@ class RoadmapManager : public rclcpp::Node
           b.x = tx/scale;
           b.y = ty/scale;
           marker.points.push_back(b);
-
         }
       }
       log(std::to_string(result));
