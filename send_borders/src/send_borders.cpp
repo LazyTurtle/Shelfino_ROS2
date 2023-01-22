@@ -22,7 +22,7 @@ class BordersPublisher : public rclcpp::Node
     BordersPublisher()
     : Node("send_borders")
     {
-        publisher_ = this->create_publisher<geometry_msgs::msg::PolygonStamped>("map_borders", 1);
+        publisher_ = this->create_publisher<geometry_msgs::msg::PolygonStamped>("map_borders", 10);
 
         auto interval = 1000ms;
         timer_ = this->create_wall_timer(interval, std::bind(&BordersPublisher::publish_borders, this));

@@ -20,7 +20,7 @@ class GatesPublisher : public rclcpp::Node
     GatesPublisher()
     : Node("send_gates")
     {
-      publisher_ = this->create_publisher<geometry_msgs::msg::PoseArray>("gate_position", 1);
+      publisher_ = this->create_publisher<geometry_msgs::msg::PoseArray>("gate_position", 10);
 
       auto interval = 1000ms;
       timer_ = this->create_wall_timer(interval, std::bind(&GatesPublisher::publish_gates, this));

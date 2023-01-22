@@ -25,14 +25,14 @@ class ObstaclesPublisher : public rclcpp::Node
     ObstaclesPublisher()
     : Node("obstacles_sender")
     {
-        obstacle_array_pub = this->create_publisher<obstacles_msgs::msg::ObstacleArrayMsg>("obstacles", 1);
+        obstacle_array_pub = this->create_publisher<obstacles_msgs::msg::ObstacleArrayMsg>("obstacles", 10);
 
         obstacle_array = create_obstacles();
 
         for(int i = 0; i<obstacle_array.obstacles.size(); i++){
           std::ostringstream s;
           s <<"obs"<<(i+1);
-          pubs.push_back(this->create_publisher<geometry_msgs::msg::PolygonStamped>(s.str(), 1));
+          pubs.push_back(this->create_publisher<geometry_msgs::msg::PolygonStamped>(s.str(), 10));
         }
 
         auto interval = 1000ms;
