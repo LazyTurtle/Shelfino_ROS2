@@ -164,14 +164,14 @@ class RoadmapManager : public rclcpp::Node
     }
 
     // voronoi to geometry, point
-    geometry_msgs::msg::Point v2g_p(boost::polygon::voronoi_vertex<double> vertex, const int scale = 1){
+    geometry_msgs::msg::Point v2g_p(const boost::polygon::voronoi_vertex<double> vertex, const int scale = 1){
       geometry_msgs::msg::Point p;
       p.x = vertex.x() / scale;
       p.y = vertex.y() / scale;
       return p;
     }
     // boost to geometry, point
-    geometry_msgs::msg::Point b2g_p(BoostPoint point, const int scale = 1){
+    geometry_msgs::msg::Point b2g_p(const BoostPoint point, const int scale = 1){
       geometry_msgs::msg::Point p;
       p.x = point.x() / scale;
       p.y = point.y() / scale;
@@ -196,13 +196,13 @@ class RoadmapManager : public rclcpp::Node
       marker.id = 0;
       marker.action = visualization_msgs::msg::Marker::ADD;
       marker.type = visualization_msgs::msg::Marker::LINE_LIST;
-      marker.scale.x = 0.1;
+      marker.scale.x = 0.05;
       marker.scale.y = 0.1;
       marker.scale.z = 0.1;
       marker.color.a = 1.0;
-      marker.color.r = 0.0;
-      marker.color.g = 1.0;
-      marker.color.b = 0.0;
+      marker.color.r = 0.5;
+      marker.color.g = 0.5;
+      marker.color.b = 0.5;
 
       for (voronoi_diagram<double>::const_edge_iterator it = vd.edges().begin(); it != vd.edges().end(); ++it) {
         
