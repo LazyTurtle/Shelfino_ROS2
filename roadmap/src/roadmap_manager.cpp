@@ -276,6 +276,33 @@ class RoadmapManager : public rclcpp::Node
     
 };
 
+class Node{
+
+  public:
+
+    double x, y;
+    std::vector<int> neighbours;
+
+    Node(double in_x, double in_y) : x(in_x), y(in_y){}
+
+    static double distance(Node& a, Node& b){
+      double x = a.x - b.x;
+      double y = a.y - b.y;
+      double d = std::sqrt(std::pow(x,2)+std::pow(y,2)); 
+      return d; 
+    }
+};
+
+class Graph{
+
+  public:
+
+    std::vector<Node> nodes;
+
+    Graph(){}
+
+};
+
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
