@@ -112,7 +112,7 @@ class RoadmapManager : public rclcpp::Node
           BoostSegment segment(a, b);
 
           segments_data.push_back(segment);
-          points_data.push_back(low(segment));
+          //points_data.push_back(low(segment));
         }
         auto tx = border.points.back().x;
         auto ty = border.points.back().y;
@@ -123,7 +123,7 @@ class RoadmapManager : public rclcpp::Node
         BoostSegment segment(a, b);
 
         segments_data.push_back(segment);
-        points_data.push_back(low(segment));
+        //points_data.push_back(low(segment));
       }
 
       auto obstacles = obstacles_ptr->obstacles;
@@ -134,13 +134,13 @@ class RoadmapManager : public rclcpp::Node
             BoostPoint b(obs.polygon.points[i+1].x*scale, obs.polygon.points[i+1].y*scale);
             BoostSegment segment(a, b);
             segments_data.push_back(segment);
-            points_data.push_back(low(segment));
+            //points_data.push_back(low(segment));
           }
           BoostPoint a(obs.polygon.points.back().x*scale, obs.polygon.points.back().y*scale);
           BoostPoint b(obs.polygon.points[0].x*scale, obs.polygon.points[0].y*scale);
           BoostSegment segment(a, b);
           segments_data.push_back(segment);
-          points_data.push_back(low(segment));
+          //points_data.push_back(low(segment));
         }
       }
 
