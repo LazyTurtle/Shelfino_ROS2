@@ -64,7 +64,7 @@ def generate_launch_description():
                        '-entity', 'shelfino1',
                        '-robot_namespace', 'shelfino1',
                        '-x', '0',
-                       '-y', '0']
+                       '-y', '-1']
         ),
 
         Node(
@@ -74,7 +74,7 @@ def generate_launch_description():
                        '-entity', 'shelfino2',
                        '-robot_namespace', 'shelfino2',
                        '-x', '0',
-                       '-y', '-1']
+                       '-y', '0']
         ),
 
         Node(
@@ -82,7 +82,7 @@ def generate_launch_description():
             executable='spawn_entity.py',
             arguments=['-file', LaunchConfiguration('model'),
                        '-entity', 'shelfino3',
-                       '-robot_namespace', 'shelfino2',
+                       '-robot_namespace', 'shelfino3',
                        '-x', '0',
                        '-y', '1']
         ),

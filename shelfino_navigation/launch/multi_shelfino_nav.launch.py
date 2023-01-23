@@ -41,6 +41,13 @@ def generate_launch_description():
             'config',
             'shelfino2.yaml'))
 
+    param_file_name3 = LaunchConfiguration(
+        'params_file',
+        default=os.path.join(
+            get_package_share_directory('shelfino_navigation'),
+            'config',
+            'shelfino3.yaml'))
+
     nav2_launch_file_dir = os.path.join(get_package_share_directory('nav2_bringup'), 'launch')
 
     rviz_config_dir1 = os.path.join(
@@ -52,6 +59,11 @@ def generate_launch_description():
         get_package_share_directory('shelfino_navigation'),
         'rviz',
         'shelfino2_nav.rviz')
+
+    rviz_config_dir3 = os.path.join(
+        get_package_share_directory('shelfino_navigation'),
+        'rviz',
+        'shelfino3_nav.rviz')
 
     remappings = [('/tf', 'tf'),
                     ('/tf_static', 'tf_static'),
@@ -116,6 +128,30 @@ def generate_launch_description():
             package='rviz2',
             executable='rviz2',
             namespace='shelfino2',
+            arguments=['-d', rviz_config_dir2],
+            parameters=[{'use_sim_time': sim}],
+            condition=UnlessCondition(headless),
+            remappings=remappings,
+            output='screen'),
+
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([nav2_launch_file_dir, '/bringup_launch.py']),
+            launch_arguments={
+                'map': map_dir,
+                'use_sim_time': sim,
+                'namespace': 'shelfino3',
+                'use_namespace': 'True',
+                'use_composition': 'False',
+                'autostart': 'False',
+                'use_respawn': 'True',
+                'params_file': param_file_name2}.items(),
+            condition=UnlessCondition(remote),
+        ),
+
+        Node(
+            package='rviz2',
+            executable='rviz2',
+            namespace='shelfino3',
             arguments=['-d', rviz_config_dir2],
             parameters=[{'use_sim_time': sim}],
             condition=UnlessCondition(headless),
