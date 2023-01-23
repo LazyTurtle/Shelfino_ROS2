@@ -33,30 +33,7 @@ class RoadmapManager : public rclcpp::Node
   public:
     RoadmapManager()
     : Node("RoadmapManager"){
-      const auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
-
-      border_subscriber = this->create_subscription<geometry_msgs::msg::PolygonStamped>(
-      "map_borders", qos, std::bind(&RoadmapManager::set_borders, this, _1));
-      
-      obstacles_subscriber = this->create_subscription<obstacles_msgs::msg::ObstacleArrayMsg>(
-      "obstacles", qos, std::bind(&RoadmapManager::set_obstacles, this, _1));
-
-      gates_subscriber = this->create_subscription<geometry_msgs::msg::PoseArray>(
-      "gate_position", qos, std::bind(&RoadmapManager::set_gates, this, _1));
-
-      path_service = this->create_service<roadmap_interfaces::srv::PathService>(
-        "compute_path", std::bind(&RoadmapManager::compute_path, this, _1, _2));
-
-      test_service = this->create_service<std_srvs::srv::Empty>(
-        "test_service", std::bind(&RoadmapManager::test, this, _1, _2));
-
-      diagram_publisher = this->create_publisher<visualization_msgs::msg::Marker>(
-        "voronoi_diagram", qos);
-
-      auto interval = 1000ms;
-      timer_ = this->create_wall_timer(interval, std::bind(&RoadmapManager::publish_diagram_marker, this));
-
-      
+      node_setup();
     }
 
   private:
@@ -85,6 +62,32 @@ class RoadmapManager : public rclcpp::Node
 
     int scale = 100;
     int discretization = 0.2 * scale;
+
+    void node_setup(){
+      
+      const auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
+
+      border_subscriber = this->create_subscription<geometry_msgs::msg::PolygonStamped>(
+      "map_borders", qos, std::bind(&RoadmapManager::set_borders, this, _1));
+      
+      obstacles_subscriber = this->create_subscription<obstacles_msgs::msg::ObstacleArrayMsg>(
+      "obstacles", qos, std::bind(&RoadmapManager::set_obstacles, this, _1));
+
+      gates_subscriber = this->create_subscription<geometry_msgs::msg::PoseArray>(
+      "gate_position", qos, std::bind(&RoadmapManager::set_gates, this, _1));
+
+      path_service = this->create_service<roadmap_interfaces::srv::PathService>(
+        "compute_path", std::bind(&RoadmapManager::compute_path, this, _1, _2));
+
+      test_service = this->create_service<std_srvs::srv::Empty>(
+        "test_service", std::bind(&RoadmapManager::test, this, _1, _2));
+
+      diagram_publisher = this->create_publisher<visualization_msgs::msg::Marker>(
+        "voronoi_diagram", qos);
+
+      auto interval = 1000ms;
+      timer_ = this->create_wall_timer(interval, std::bind(&RoadmapManager::publish_diagram_marker, this));
+    }
 
     void log(std::string log_str){
       RCLCPP_INFO(this->get_logger(), log_str);
@@ -212,7 +215,7 @@ class RoadmapManager : public rclcpp::Node
             geometry_msgs::msg::Point b = v2g_p(*edge.vertex1(), scale);
             marker.points.push_back(a);
             marker.points.push_back(b);
-            
+
           }else{
             // is curved
             std::vector<BoostPoint> points;
