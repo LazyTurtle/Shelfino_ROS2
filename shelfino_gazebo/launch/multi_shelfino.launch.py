@@ -73,8 +73,18 @@ def generate_launch_description():
             arguments=['-file', LaunchConfiguration('model'),
                        '-entity', 'shelfino2',
                        '-robot_namespace', 'shelfino2',
-                       '-x', '1',
-                       '-y', '0']
+                       '-x', '0',
+                       '-y', '-1']
+        ),
+
+        Node(
+            package='gazebo_ros',
+            executable='spawn_entity.py',
+            arguments=['-file', LaunchConfiguration('model'),
+                       '-entity', 'shelfino3',
+                       '-robot_namespace', 'shelfino2',
+                       '-x', '0',
+                       '-y', '1']
         ),
 
         IncludeLaunchDescription(
@@ -87,6 +97,12 @@ def generate_launch_description():
             PythonLaunchDescriptionSource([launch_file_dir, '/robot_state_publisher.launch.py']),
             launch_arguments={'use_sim_time': use_sim_time,
                               'robot_id': 'shelfino2'}.items()
+        ),
+
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([launch_file_dir, '/robot_state_publisher.launch.py']),
+            launch_arguments={'use_sim_time': use_sim_time,
+                              'robot_id': 'shelfino3'}.items()
         ),
 
         Node(
@@ -102,6 +118,15 @@ def generate_launch_description():
             package='rviz2',
             executable='rviz2',
             namespace='shelfino2',
+            arguments=['-d', rviz_config1],
+            condition=IfCondition(rviz),
+            remappings=remappings
+        ),
+
+        Node(
+            package='rviz2',
+            executable='rviz2',
+            namespace='shelfino3',
             arguments=['-d', rviz_config1],
             condition=IfCondition(rviz),
             remappings=remappings
@@ -119,6 +144,14 @@ def generate_launch_description():
             package='get_positions',
             executable='get_positions',
             namespace='shelfino2',
+            remappings=[
+            ('/tf', 'tf')],
+            ),
+
+        Node(
+            package='get_positions',
+            executable='get_positions',
+            namespace='shelfino3',
             remappings=[
             ('/tf', 'tf')],
             ),
