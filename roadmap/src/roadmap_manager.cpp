@@ -160,6 +160,21 @@ class RoadmapManager : public rclcpp::Node
       return p;
     }
 
+    // voronoi to geometry, point
+    geometry_msgs::msg::Point v2g_p(boost::polygon::voronoi_vertex<double> vertex, const int scale = 1){
+      geometry_msgs::msg::Point p;
+      p.x = vertex.x() / scale;
+      p.y = vertex.y() / scale;
+      return p;
+    }
+    // boost to geometry, point
+    geometry_msgs::msg::Point b2g_p(BoostPoint point, const int scale = 1){
+      geometry_msgs::msg::Point p;
+      p.x = point.x() / scale;
+      p.y = point.y() / scale;
+      return p;
+    }
+
     void compute_path(
       const std::shared_ptr<roadmap_interfaces::srv::PathService_Request> request,
       std::shared_ptr<roadmap_interfaces::srv::PathService_Response> response){
@@ -186,34 +201,31 @@ class RoadmapManager : public rclcpp::Node
       marker.color.g = 1.0;
       marker.color.b = 0.0;
 
-      int result = 0;
       for (voronoi_diagram<double>::const_edge_iterator it = vd.edges().begin(); it != vd.edges().end(); ++it) {
         
         if (it->is_primary() && it->is_finite()){
-          ++result;
+          // we don't really care about the secondary ones since we can't use
+          // them to navigate, and the infinite ones which are unfeasible
           if(it->is_linear()){
-            geometry_msgs::msg::Point a, b;
-            auto tx = it->vertex0()->x();
-            auto ty = it->vertex0()->y();
-            a.x = tx/scale;
-            a.y = ty/scale;
+            auto edge = *it;
+            geometry_msgs::msg::Point a = v2g_p(*edge.vertex0(), scale);
+            geometry_msgs::msg::Point b = v2g_p(*edge.vertex1(), scale);
             marker.points.push_back(a);
-            tx = it->vertex1()->x();
-            ty = it->vertex1()->y();
-            b.x = tx/scale;
-            b.y = ty/scale;
             marker.points.push_back(b);
+            
           }else{
             // is curved
             std::vector<BoostPoint> points;
+
             BoostPoint vertex0(it->vertex0()->x(), it->vertex0()->y());
-            points.push_back(vertex0);
             BoostPoint vertex1(it->vertex1()->x(), it->vertex1()->y());
+
+            points.push_back(vertex0);
             points.push_back(vertex1);
 
             boost::polygon::voronoi_edge<double> edge = *it;
 
-
+            // the process needs a segment and a specific point for the orientation
             BoostPoint point = edge.cell()->contains_point() ?
               retrieve_point(*edge.cell()) :
               retrieve_point(*edge.twin()->cell());
@@ -225,13 +237,8 @@ class RoadmapManager : public rclcpp::Node
             point, segment, discretization, &points);
 
             for(int i = 0; i<points.size()-1; i++){
-              auto a = points[i];
-              auto b = points[i+1];
-              geometry_msgs::msg::Point ma, mb;
-              ma.x = a.x()/scale;
-              ma.y = a.y()/scale;
-              mb.x = b.x()/scale;
-              mb.y = b.y()/scale;
+              geometry_msgs::msg::Point ma = b2g_p(points[i], scale);
+              geometry_msgs::msg::Point mb = b2g_p(points[i+1], scale);
               marker.points.push_back(ma);
               marker.points.push_back(mb);
             }
