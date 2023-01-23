@@ -37,20 +37,20 @@ class BordersPublisher : public rclcpp::Node
         pol1.header = hh;
 
         std::vector<geometry_msgs::msg::Point32> points_temp;
-        point.x = -5;
-        point.y = -5;
+        point.x = -5; // -2.5;
+        point.y = -5; // -5;
         point.z = 0;
         points_temp.push_back(point);
-        point.x = -5;
-        point.y = 5;
+        point.x = -5; //-3.86;
+        point.y = 5; //-2.6;
         point.z = 0;
         points_temp.push_back(point);
-        point.x = 5;
-        point.y = 5;
+        point.x = 5; //1.84;
+        point.y = 5; //0.794;
         point.z = 0;
         points_temp.push_back(point);
-        point.x = 5;
-        point.y = -5;
+        point.x = 5; //3.29;
+        point.y = -5; //-1.55;
         point.z = 0;
         points_temp.push_back(point);
         pol.points = points_temp;

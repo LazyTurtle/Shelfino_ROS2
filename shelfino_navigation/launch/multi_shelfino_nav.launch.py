@@ -83,6 +83,7 @@ def generate_launch_description():
                 'use_namespace': 'True',
                 'use_composition': 'False',
                 'autostart': 'False',
+                'use_respawn': 'True',
                 'params_file': param_file_name1}.items(),
             condition=UnlessCondition(remote),
         ),
@@ -106,6 +107,7 @@ def generate_launch_description():
                 'use_namespace': 'True',
                 'use_composition': 'False',
                 'autostart': 'False',
+                'use_respawn': 'True',
                 'params_file': param_file_name2}.items(),
             condition=UnlessCondition(remote),
         ),
@@ -119,39 +121,6 @@ def generate_launch_description():
             condition=UnlessCondition(headless),
             remappings=remappings,
             output='screen'),
-
-        Node(
-            package='get_positions',
-            executable='get_positions',
-            namespace='shelfino1',
-            remappings=[
-            ('/tf', 'tf')],
-            condition=UnlessCondition(remote),
-            ),
-
-        Node(
-            package='get_positions',
-            executable='get_positions',
-            namespace='shelfino2',
-            remappings=[
-            ('/tf', 'tf')],
-            condition=UnlessCondition(remote),
-            ),
-
-        # Node(
-        #     package='send_obstacles',
-        #     executable='send_obstacles'
-        # ),
-
-        # Node(
-        #     package='send_borders',
-        #     executable='send_borders'
-        # ),
-
-        # Node(
-        #     package='send_gates',
-        #     executable='send_gates'
-        # ),
     ])
 
     
