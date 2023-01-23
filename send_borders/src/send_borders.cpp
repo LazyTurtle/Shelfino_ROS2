@@ -22,7 +22,8 @@ class BordersPublisher : public rclcpp::Node
     BordersPublisher()
     : Node("send_borders")
     {
-        publisher_ = this->create_publisher<geometry_msgs::msg::PolygonStamped>("map_borders", 10);
+        const auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
+        publisher_ = this->create_publisher<geometry_msgs::msg::PolygonStamped>("map_borders", qos);
 
         auto interval = 1000ms;
         timer_ = this->create_wall_timer(interval, std::bind(&BordersPublisher::publish_borders, this));
