@@ -108,6 +108,22 @@ def generate_launch_description():
         ),
 
         Node(
+            package='get_positions',
+            executable='get_positions',
+            namespace='shelfino1',
+            remappings=[
+            ('/tf', 'tf')],
+            ),
+
+        Node(
+            package='get_positions',
+            executable='get_positions',
+            namespace='shelfino2',
+            remappings=[
+            ('/tf', 'tf')],
+            ),
+
+        Node(
             package='send_obstacles',
             executable='send_obstacles'
         ),

@@ -35,77 +35,70 @@ class PathPublisher : public rclcpp::Node
     PathPublisher()
     : Node("path_talker")
     {
+        const auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
 
-        std::string target_frame_ = this->declare_parameter<std::string>("target_frame", "base_link");
+        subscription_ = this->create_subscription<geometry_msgs::msg::TransformStamped>(
+        "shelfino2/transform", qos, std::bind(&PathPublisher::handle_transform, this, std::placeholders::_1));
 
-        std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
-        std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
-
-        tf_buffer_ =
-        std::make_unique<tf2_ros::Buffer>(this->get_clock());
-        tf_listener_ =
-        std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
-
-        std::string fromFrameRel = target_frame_.c_str();
-        std::string toFrameRel = "map";
-
-        geometry_msgs::msg::TransformStamped t;
-
-        // Look up for the transformation between target_frame and turtle2 frames
-        // and send velocity commands for turtle2 to reach target_frame
-        try {
-            rclcpp::Time now = this->get_clock()->now();
-            t = tf_buffer_->lookupTransform(toFrameRel, fromFrameRel, tf2::TimePointZero, 5s);
-        } catch (const tf2::TransformException & ex) {
-            RCLCPP_INFO(this->get_logger(), "Could not transform %s to %s: %s",toFrameRel.c_str(), fromFrameRel.c_str(), ex.what());
-            return;
-        }
-
-        std::cout << "x: " << t.transform.translation.x << std::endl;
-        std::cout << "y: " << t.transform.translation.y << std::endl;
-
-        tf2::Quaternion q(t.transform.rotation.x,t.transform.rotation.y,t.transform.rotation.z,t.transform.rotation.w);
-        tf2::Matrix3x3 m(q);
-        double roll, pitch, yaw;
-        m.getRPY(roll, pitch, yaw);
-        
-        publisher_ = this->create_publisher<nav_msgs::msg::Path>("plan", 10);
-        Dubins_curve curve;
-        curve = dubins_shortest_path(t.transform.translation.x, t.transform.translation.y, yaw, 0, 0, M_PI+M_PI/4 ,5);
-        nav_msgs::msg::Path path_msg = plot_dubins(curve);
-
-        using FollowPath = nav2_msgs::action::FollowPath;
-        // using GoalHandleFollowPath = rclcpp_action::ClientGoalHandle<FollowPath>;
-
-        rclcpp_action::Client<FollowPath>::SharedPtr client_ptr_;
-
-        client_ptr_ = rclcpp_action::create_client<FollowPath>(this,"follow_path");
-
-        if (!client_ptr_->wait_for_action_server()) {
-            RCLCPP_ERROR(this->get_logger(), "Action server not available after waiting");
-            rclcpp::shutdown();
-        }
-
-        auto goal_msg = FollowPath::Goal();
-        goal_msg.path = path_msg;
-        goal_msg.controller_id = "FollowPath";
-
-        RCLCPP_INFO(this->get_logger(), "Sending goal");
-
-        client_ptr_->async_send_goal(goal_msg);
-        
-        
-        for(int i = 0; i<2; i++){
-            publisher_->publish(path_msg);
-            usleep(1000000);
-            RCLCPP_INFO(this->get_logger(), "%s", path_msg.header.frame_id.c_str());
-        }
-        
-      
+        publisher_ = this->create_publisher<nav_msgs::msg::Path>("shelfino2/plan", 10);
     }
 
   
   private:
+
+    void handle_transform(const std::shared_ptr<geometry_msgs::msg::TransformStamped> msg)
+    {
+        t = *msg;
+        
+        if(!data_sent){
+            data_sent = true;
+
+            std::cout << "x: " << t.transform.translation.x << std::endl;
+            std::cout << "y: " << t.transform.translation.y << std::endl;
+
+            tf2::Quaternion q(t.transform.rotation.x,t.transform.rotation.y,t.transform.rotation.z,t.transform.rotation.w);
+            tf2::Matrix3x3 m(q);
+            double roll, pitch, yaw;
+            m.getRPY(roll, pitch, yaw);
+            
+            Dubins_curve curve;
+            curve = dubins_shortest_path(t.transform.translation.x, t.transform.translation.y, yaw, 0, 0, M_PI+M_PI/4 ,3);
+            nav_msgs::msg::Path path_msg = plot_dubins(curve);
+
+            std::vector<geometry_msgs::msg::PoseStamped> poses_temp;
+            path_msg.header.stamp = this->get_clock()->now();
+            path_msg.header.frame_id = "map";
+
+            using FollowPath = nav2_msgs::action::FollowPath;
+            // using GoalHandleFollowPath = rclcpp_action::ClientGoalHandle<FollowPath>;
+
+            rclcpp_action::Client<FollowPath>::SharedPtr client_ptr_;
+
+            client_ptr_ = rclcpp_action::create_client<FollowPath>(this,"shelfino2/follow_path");
+
+            if (!client_ptr_->wait_for_action_server()) {
+                RCLCPP_ERROR(this->get_logger(), "Action server not available after waiting");
+                rclcpp::shutdown();
+            }
+
+            publisher_->publish(path_msg);
+            sleep(0.5);
+            publisher_->publish(path_msg);
+
+            auto goal_msg = FollowPath::Goal();
+            goal_msg.path = path_msg;
+            goal_msg.controller_id = "FollowPath";
+
+            RCLCPP_INFO(this->get_logger(), "Sending goal");
+
+            client_ptr_->async_send_goal(goal_msg);
+            sleep(0.5);
+            client_ptr_->async_send_goal(goal_msg);
+            
+        }
+
+        return;
+    }
 
     Plot_arc_struct plot_arc(Dubins_arc arc){
     
@@ -178,17 +171,22 @@ class PathPublisher : public rclcpp::Node
       geometry_msgs::msg::Quaternion quaternion_temp;
       geometry_msgs::msg::PoseStamped pose_stamped_temp;
 
-      for(int i = 0; i<((npts)+200); i++) {
+      for(int i = 0; i<((npts)*3); i++) {
             
             position_temp.x = ret[i][0];
             
             position_temp.y = ret[i][1];
             position_temp.z = 0 ;
 
-            quaternion_temp.x = 0.0;
-            quaternion_temp.y = 0 ;
-            quaternion_temp.z = 0 ;
-            quaternion_temp.w = 0;
+            quaternion_temp.x =  0.0;
+            quaternion_temp.y =  0.0;
+            quaternion_temp.z =  0.0;
+            quaternion_temp.w =  0.0;
+
+            if(i == ((npts)*3)-1){
+                quaternion_temp.z =  0.9252115;
+                quaternion_temp.w = -0.3794518;
+            }
 
             pose_temp.position = position_temp;
             pose_temp.orientation = quaternion_temp;
@@ -197,7 +195,9 @@ class PathPublisher : public rclcpp::Node
             pose_stamped_temp.header.stamp = this->get_clock()->now();
             pose_stamped_temp.header.frame_id = "";
 
-            poses_temp.push_back(pose_stamped_temp);
+            if (i <((npts)*3)-30 || i == ((npts)*3)-1){
+                poses_temp.push_back(pose_stamped_temp);
+            }
 
         }
         path_msg.poses = poses_temp;
@@ -205,10 +205,10 @@ class PathPublisher : public rclcpp::Node
         return path_msg;
     }
     
-  
-
-    
+    bool data_sent = false;
+    geometry_msgs::msg::TransformStamped t;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr publisher_;
+    rclcpp::Subscription<geometry_msgs::msg::TransformStamped>::SharedPtr subscription_;
 };
 
 int main(int argc, char * argv[])

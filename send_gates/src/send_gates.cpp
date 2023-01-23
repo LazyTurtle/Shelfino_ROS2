@@ -32,21 +32,21 @@ class GatesPublisher : public rclcpp::Node
 
         msg.header = hh;
 
-        pose.position.x = -5;
-        pose.position.y = -2.5;
-        pose.position.z = 0;
-        pose.orientation.x = 0;
-        pose.orientation.y = 0;
-        pose.orientation.z = 0;
-        pose.orientation.w = 0;
-        pose_array_temp.push_back(pose);
-        pose.position.x = -4;
-        pose.position.y = 5;
-        pose.position.z = 0;
-        pose.orientation.x = 0;
-        pose.orientation.y = 0;
-        pose.orientation.z = 0;
-        pose.orientation.w = 0;
+         pose.position.x = -5;
+         pose.position.y = -2.5;
+         //pose.position.x = -2.81;
+         //pose.position.y = -4.46;
+         pose.position.z = 0;
+         pose.orientation.x = 0;
+         pose.orientation.y = 0;
+         pose.orientation.z = 0;
+         pose.orientation.w = 0;
+         pose_array_temp.push_back(pose);
+         pose.position.x = -4;
+         pose.position.y = 5;
+         //pose.position.x = -1.36;
+         //pose.position.y = -1.11;
+
         pose_array_temp.push_back(pose);
         msg.poses = pose_array_temp;
 
