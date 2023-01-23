@@ -9,6 +9,7 @@
 #include "geometry_msgs/msg/point32.hpp"
 #include "geometry_msgs/msg/polygon.hpp"
 #include "geometry_msgs/msg/polygon_stamped.hpp"
+#include "geometry_msgs/msg/pose_array.hpp"
 #include "obstacles_msgs/msg/obstacle_array_msg.hpp"
 using std::placeholders::_1;
 using std::placeholders::_2;
@@ -40,6 +41,9 @@ class RoadmapManager : public rclcpp::Node
       obstacles_subscriber = this->create_subscription<obstacles_msgs::msg::ObstacleArrayMsg>(
       "obstacles", qos, std::bind(&RoadmapManager::set_obstacles, this, _1));
 
+      gates_subscriber = this->create_subscription<geometry_msgs::msg::PoseArray>(
+      "gate_position", qos, std::bind(&RoadmapManager::set_gates, this, _1));
+
       path_service = this->create_service<roadmap_interfaces::srv::PathService>(
         "compute_path", std::bind(&RoadmapManager::compute_path, this, _1, _2));
 
@@ -50,7 +54,7 @@ class RoadmapManager : public rclcpp::Node
         "voronoi_diagram", qos);
 
       auto interval = 1000ms;
-      timer_ = this->create_wall_timer(interval, std::bind(&RoadmapManager::publish_diagram, this));
+      timer_ = this->create_wall_timer(interval, std::bind(&RoadmapManager::publish_diagram_marker, this));
 
       
     }
@@ -59,16 +63,21 @@ class RoadmapManager : public rclcpp::Node
 
     rclcpp::Subscription<geometry_msgs::msg::PolygonStamped>::SharedPtr border_subscriber;
     rclcpp::Subscription<obstacles_msgs::msg::ObstacleArrayMsg>::SharedPtr obstacles_subscriber;
+    rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr gates_subscriber;
 
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr diagram_publisher;
+
     rclcpp::TimerBase::SharedPtr timer_;
 
 
     rclcpp::Service<roadmap_interfaces::srv::PathService>::SharedPtr path_service;
     rclcpp::Service<std_srvs::srv::Empty>::SharedPtr test_service;
 
-    std::shared_ptr<geometry_msgs::msg::PolygonStamped> borders_ptr;
-    std::shared_ptr<obstacles_msgs::msg::ObstacleArrayMsg> obstacles_ptr;
+    std::shared_ptr<geometry_msgs::msg::PolygonStamped> borders_msg;
+    std::shared_ptr<obstacles_msgs::msg::ObstacleArrayMsg> obstacles_msg;
+    std::shared_ptr<geometry_msgs::msg::PoseArray> gates_msg;
+
+    visualization_msgs::msg::Marker vd_marker;    
 
     voronoi_diagram<double> vd;
     std::vector<BoostSegment> segments_data;
@@ -76,25 +85,32 @@ class RoadmapManager : public rclcpp::Node
 
     int scale = 100;
     int discretization = 0.2 * scale;
-    bool bIsDiagramReady = false;
 
     void log(std::string log_str){
       RCLCPP_INFO(this->get_logger(), log_str);
     }
 
     void set_borders(const geometry_msgs::msg::PolygonStamped::SharedPtr msg){
-      borders_ptr = msg;
+      borders_msg = msg;
     }
 
     void set_obstacles(const obstacles_msgs::msg::ObstacleArrayMsg::SharedPtr msg){
-      obstacles_ptr = msg;
+      obstacles_msg = msg;
+    }
+
+    void set_gates(const geometry_msgs::msg::PoseArray::SharedPtr msg){
+      gates_msg = msg;
     }
 
     void test(
       const std::shared_ptr<std_srvs::srv::Empty_Request> request,
       std::shared_ptr<std_srvs::srv::Empty_Response> response){
+      update_voronoi_diagram();
+    }
+
+    void update_voronoi_diagram(){
       
-      if(!borders_ptr || !obstacles_ptr){
+      if(!borders_msg || !obstacles_msg){
         log("Pointers not ready.");
         return;
       }
@@ -102,48 +118,11 @@ class RoadmapManager : public rclcpp::Node
       segments_data.clear();
       points_data.clear();
 
-      auto border = borders_ptr->polygon;
-      {
-        for(int i = 0; i<border.points.size()-1; i++){
-          auto tx = border.points[i].x;
-          auto ty = border.points[i].y;
-          BoostPoint a(tx*scale,ty*scale);
-          tx = border.points[i+1].x;
-          ty = border.points[i+1].y;
-          BoostPoint b(tx*scale,ty*scale);
-          BoostSegment segment(a, b);
+      add_polygon_to_boost_segments(borders_msg->polygon, segments_data);
 
-          segments_data.push_back(segment);
-          //points_data.push_back(low(segment));
-        }
-        auto tx = border.points.back().x;
-        auto ty = border.points.back().y;
-        BoostPoint a(tx*scale,ty*scale);
-        tx = border.points[0].x;
-        ty = border.points[0].y;
-        BoostPoint b(tx*scale,ty*scale);
-        BoostSegment segment(a, b);
-
-        segments_data.push_back(segment);
-        //points_data.push_back(low(segment));
-      }
-
-      auto obstacles = obstacles_ptr->obstacles;
-      {
-        for(auto& obs:obstacles){
-          for(int i = 0; i<obs.polygon.points.size()-1; i++){
-            BoostPoint a(obs.polygon.points[i].x*scale, obs.polygon.points[i].y*scale);
-            BoostPoint b(obs.polygon.points[i+1].x*scale, obs.polygon.points[i+1].y*scale);
-            BoostSegment segment(a, b);
-            segments_data.push_back(segment);
-            //points_data.push_back(low(segment));
-          }
-          BoostPoint a(obs.polygon.points.back().x*scale, obs.polygon.points.back().y*scale);
-          BoostPoint b(obs.polygon.points[0].x*scale, obs.polygon.points[0].y*scale);
-          BoostSegment segment(a, b);
-          segments_data.push_back(segment);
-          //points_data.push_back(low(segment));
-        }
+      std::vector<obstacles_msgs::msg::ObstacleMsg> obstacles = obstacles_msg->obstacles;
+      for(auto& obs:obstacles){
+        add_polygon_to_boost_segments(obs.polygon, segments_data);
       }
 
       vd.clear();
@@ -151,9 +130,34 @@ class RoadmapManager : public rclcpp::Node
         points_data.begin(), points_data.end(),
         segments_data.begin(), segments_data.end(), &vd);
       
-      bIsDiagramReady = true;
-      
-      
+      log("Updated voronoi diagram.");
+
+      update_diagram_marker();
+
+    }
+
+    void add_polygon_to_boost_segments(
+      const geometry_msgs::msg::Polygon& poly, std::vector<BoostSegment>& segments){
+
+      for(int i = 0; i<poly.points.size()-1; i++){
+        BoostPoint a = g2b_p(poly.points[i], scale);
+        BoostPoint b = g2b_p(poly.points[i+1], scale);
+        BoostSegment segment(a, b);
+        segments.push_back(segment);
+      }
+      BoostPoint a = g2b_p(poly.points.back(), scale);
+      BoostPoint b = g2b_p(poly.points[0], scale);
+      BoostSegment segment(a, b);
+
+      segments.push_back(segment);
+    }
+
+    // geometry to boost, point
+    BoostPoint g2b_p(const geometry_msgs::msg::Point32 geo_point, const int scale = 1){
+      double x = geo_point.x * scale;
+      double y = geo_point.y * scale;
+      BoostPoint p(x, y);
+      return p;
     }
 
     void compute_path(
@@ -162,10 +166,11 @@ class RoadmapManager : public rclcpp::Node
         response->result = false;
     }
 
-    void publish_diagram(){
-      if(!bIsDiagramReady)
-        return;
-        
+    void publish_diagram_marker(){
+      diagram_publisher->publish(vd_marker);
+    }
+
+    void update_diagram_marker(){        
       visualization_msgs::msg::Marker marker;
 
       marker.header.stamp = this->now();
@@ -208,6 +213,7 @@ class RoadmapManager : public rclcpp::Node
 
             boost::polygon::voronoi_edge<double> edge = *it;
 
+
             BoostPoint point = edge.cell()->contains_point() ?
               retrieve_point(*edge.cell()) :
               retrieve_point(*edge.twin()->cell());
@@ -217,9 +223,6 @@ class RoadmapManager : public rclcpp::Node
             
             boost::polygon::voronoi_visual_utils<double>::discretize(
             point, segment, discretization, &points);
-            std::ostringstream s;
-            s << points.size();
-            log(s.str());
 
             for(int i = 0; i<points.size()-1; i++){
               auto a = points[i];
@@ -236,9 +239,10 @@ class RoadmapManager : public rclcpp::Node
 
         }
       }
-      log(std::to_string(result));
-
-      diagram_publisher->publish(marker);
+      vd_marker = marker;
+      std::ostringstream s;
+      s << "Updated marker.";
+      log(s.str());
     }
 
     BoostPoint retrieve_point(const boost::polygon::voronoi_cell<double>& cell) {
