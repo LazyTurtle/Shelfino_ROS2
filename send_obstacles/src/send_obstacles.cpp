@@ -46,21 +46,29 @@ class ObstaclesPublisher : public rclcpp::Node
         // First square obstacle
         {
           std::vector<geometry_msgs::msg::Point32> points_temp;
-          point.x = -1.59;
-          point.y = -2.69;
+          point.x = 0;
+          point.y = 0;
+          // point.x = -1.59;
+          // point.y = -2.69;
           point.z = 0;
           points_temp.push_back(point);
-          point.x = -1.25;
-          point.y = -2.45;
+          point.x = 0;
+          point.y = 1;
+          // point.x = -1.25;
+          // point.y = -2.45;
           point.z = 0;
           points_temp.push_back(point);
-          point.x = -1.06;
-          point.y = -2.79;
+          point.x = 1;
+          point.y = 1;
+          // point.x = -1.06;
+          // point.y = -2.79;
           point.z = 0;
           points_temp.push_back(point);
-          point.x = -1.38;
-          point.y = -2.99;
-          point.z = 0;
+          point.x = 1;
+          point.y = 0;
+          // point.x = -1.38;
+          // point.y = -2.99;
+
           points_temp.push_back(point);
           pol.points = points_temp;
           obs.polygon = pol;
@@ -71,21 +79,30 @@ class ObstaclesPublisher : public rclcpp::Node
         // First square obstacle
         {
           std::vector<geometry_msgs::msg::Point32> points_temp;
-          point.x = 0.953;
-          point.y = -1.9;
+          point.x = -1;
+          point.y = -1;
+          //point.x = 0.953;
+          //point.y = -1.9;
           point.z = 0;
           points_temp.push_back(point);
-          point.x = 0.762;
-          point.y = -1.49;
+          point.x = -1;
+          point.y = -2;
+          //point.x = 0.762;
+          //point.y = -1.49;
           point.z = 0;
           points_temp.push_back(point);
-          point.x = 1.08;
-          point.y = -1.31;
+          point.x = -2;
+          point.y = -2;
+          //point.x = 1.08;
+          //point.y = -1.31;
           point.z = 0;
           points_temp.push_back(point);
-          point.x = 1.28;
-          point.y = -1.69;
+          point.x = -2;
+          point.y = -1;
+          //point.x = 1.28;
+          //point.y = -1.69;
           point.z = 0;
+
           points_temp.push_back(point);
           pol.points = points_temp;
           obs.polygon = pol;

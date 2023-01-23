@@ -64,7 +64,7 @@ def generate_launch_description():
                        '-entity', 'shelfino1',
                        '-robot_namespace', 'shelfino1',
                        '-x', '0',
-                       '-y', '-1']
+                       '-y', '1']
         ),
 
         Node(
@@ -84,7 +84,7 @@ def generate_launch_description():
                        '-entity', 'shelfino3',
                        '-robot_namespace', 'shelfino3',
                        '-x', '0',
-                       '-y', '1']
+                       '-y', '-1']
         ),
 
         IncludeLaunchDescription(
