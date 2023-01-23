@@ -144,7 +144,7 @@ def generate_launch_description():
                 'use_composition': 'False',
                 'autostart': 'False',
                 'use_respawn': 'True',
-                'params_file': param_file_name2}.items(),
+                'params_file': param_file_name3}.items(),
             condition=UnlessCondition(remote),
         ),
 
@@ -152,7 +152,7 @@ def generate_launch_description():
             package='rviz2',
             executable='rviz2',
             namespace='shelfino3',
-            arguments=['-d', rviz_config_dir2],
+            arguments=['-d', rviz_config_dir3],
             parameters=[{'use_sim_time': sim}],
             condition=UnlessCondition(headless),
             remappings=remappings,
