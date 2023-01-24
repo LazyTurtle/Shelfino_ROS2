@@ -366,9 +366,29 @@ class RoadmapManager : public rclcpp::Node
       double y_start = request->start.y;
       double x_end = request->end.x;
       double y_end = request->end.y;
+
       int closest_node_to_start = search_graph.find_closest(-1, -4);
       int closest_node_to_end = search_graph.find_closest(4, 2);
       std::vector<int> path = search_graph.find_path(closest_node_to_start, closest_node_to_end);
+
+      std::vector<std::pair<double,double>> path_coordinates;
+      path_coordinates.push_back(std::make_pair(x_start, y_start));
+      for(int i : path){
+        double x = search_graph.nodes[i].x;
+        double y = search_graph.nodes[i].y;
+        path_coordinates.push_back(std::make_pair(x, y));
+      }
+      path_coordinates.push_back(std::make_pair(x_end, y_end));
+
+      calculated_path = refine_path(path_coordinates);
+
+
+    }
+
+    nav_msgs::msg::Path refine_path(const std::vector<std::pair<double,double>>& coordinates){
+      nav_msgs::msg::Path refined_path;
+      
+      return refined_path;
     }
 
     void update_diagram_marker(){        
