@@ -1,6 +1,8 @@
 #include <cstdio>
 #include <memory>
 #include <vector>
+#include <set>
+#include <algorithm>
 #include "rclcpp/rclcpp.hpp"
 #include "std_srvs/srv/empty.hpp"
 #include "roadmap_interfaces/srv/path_service.hpp"
@@ -27,6 +29,60 @@ typedef boost::polygon::point_data<double> BoostPoint;
 typedef boost::polygon::segment_data<double> BoostSegment;
 
 using namespace std::chrono_literals;
+
+class Node{
+
+  static double distance(Node& a, Node& b){
+    double x = a.x - b.x;
+    double y = a.y - b.y;
+    double d = std::sqrt(std::pow(x,2)+std::pow(y,2)); 
+    return d; 
+  }  
+
+  public:
+
+    double x, y;
+    std::set<int> neighbours;
+
+    Node(double in_x, double in_y) : x(in_x), y(in_y){}
+
+
+};
+
+class Graph{
+
+  public:
+
+    std::vector<Node> nodes;
+
+    Graph(){}
+    Graph(std::vector<Node> init_nodes, std::vector<std::pair<int, int>> init_edges){
+      nodes = init_nodes;
+      clean_edges();
+      add_edges(init_edges);
+    }
+
+    void add_node(double x, double y){
+      Node n(x,y);
+      nodes.push_back(n);
+    }
+
+    void clean_edges(){
+      for(auto& node : nodes){
+        node.neighbours.clear();
+      }
+    }
+
+    void add_edges(const std::vector<std::pair<int, int>>& edges){
+      for(auto& edge:edges){
+        int a = edge.first;
+        int b = edge.second;
+        nodes[a].neighbours.insert(b);
+        nodes[b].neighbours.insert(a);
+      }
+    }
+
+};
 
 class RoadmapManager : public rclcpp::Node
 {
@@ -57,6 +113,7 @@ class RoadmapManager : public rclcpp::Node
     visualization_msgs::msg::Marker vd_marker;    
 
     voronoi_diagram<double> vd;
+    Graph search_graph;
     std::vector<BoostSegment> segments_data;
     std::vector<BoostPoint> points_data;
 
@@ -136,6 +193,8 @@ class RoadmapManager : public rclcpp::Node
       log("Updated voronoi diagram.");
 
       update_diagram_marker();
+
+      add_ids_to_vertices();
 
     }
 
@@ -273,34 +332,38 @@ class RoadmapManager : public rclcpp::Node
       auto index = cell.source_index() - points_data.size();
       return segments_data[index];
     }
-    
-};
 
-class Node{
-
-  public:
-
-    double x, y;
-    std::vector<int> neighbours;
-
-    Node(double in_x, double in_y) : x(in_x), y(in_y){}
-
-    static double distance(Node& a, Node& b){
-      double x = a.x - b.x;
-      double y = a.y - b.y;
-      double d = std::sqrt(std::pow(x,2)+std::pow(y,2)); 
-      return d; 
+    void add_ids_to_vertices(){
+      int id = 0;
+      for(auto itr = vd.vertices().begin(); itr != vd.vertices().end(); ++itr){
+        auto c = itr->color();
+        c += id;
+        itr->color(c);
+        id++;
+      }
     }
-};
 
-class Graph{
+    // void build_search_graph(){
+    //   Graph graph;
+    //   for (int i = 0; i<vd.num_vertices(); i++) {
+    //     const voronoi_diagram<double>::vertex_type &vertex = vd.vertices()[i];
+    //     const voronoi_diagram<double>::edge_type *edge = vertex.incident_edge();
 
-  public:
+    //     graph.add_node(vertex.x(), vertex.y());
 
-    std::vector<Node> nodes;
+    //     do {
+    //       if (edge->is_primary()){
+    //         auto v1 = edge->vertex1();
+    //         auto itr = std::find(vd.vertices().begin(), vd.vertices().end(), v1);
+    //         int index = std::distance(vd.vertices().begin(), itr);
 
-    Graph(){}
-
+    //       }
+    //       edge = edge->rot_next();
+    //     } while (edge != vertex.incident_edge());
+    //   }
+      
+    // }
+    
 };
 
 int main(int argc, char ** argv)
