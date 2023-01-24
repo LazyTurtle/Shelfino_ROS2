@@ -38,9 +38,9 @@ class PathPublisher : public rclcpp::Node
         const auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
 
         subscription_ = this->create_subscription<geometry_msgs::msg::TransformStamped>(
-        "shelfino2/transform", qos, std::bind(&PathPublisher::handle_transform, this, std::placeholders::_1));
+        "shelfinoG/transform", qos, std::bind(&PathPublisher::handle_transform, this, std::placeholders::_1));
 
-        publisher_ = this->create_publisher<nav_msgs::msg::Path>("shelfino2/plan", 10);
+        publisher_ = this->create_publisher<nav_msgs::msg::Path>("shelfinoG/plan", 10);
     }
 
   
@@ -74,7 +74,7 @@ class PathPublisher : public rclcpp::Node
 
             rclcpp_action::Client<FollowPath>::SharedPtr client_ptr_;
 
-            client_ptr_ = rclcpp_action::create_client<FollowPath>(this,"shelfino2/follow_path");
+            client_ptr_ = rclcpp_action::create_client<FollowPath>(this,"shelfinoG/follow_path");
 
             if (!client_ptr_->wait_for_action_server()) {
                 RCLCPP_ERROR(this->get_logger(), "Action server not available after waiting");

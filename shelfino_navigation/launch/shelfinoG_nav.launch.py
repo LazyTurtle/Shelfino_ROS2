@@ -76,6 +76,7 @@ def generate_launch_description():
                 'use_namespace': 'True',
                 'use_composition': 'False',
                 'autostart': 'False',
+                'use_respawn': 'True',
                 'params_file': param_file_name}.items(),
             condition=UnlessCondition(remote),
         ),
