@@ -1,0 +1,7 @@
+geometry_msgs/Point[] points
+float64 angle -1.0  # in [0, 2*PI]
+float64 kmax
+uint32 komega 8
+---
+nav_msgs/Path path
+float64 lenght
