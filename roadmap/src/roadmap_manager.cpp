@@ -43,7 +43,7 @@ class Node{
 
     double x, y;
     std::set<int> neighbours;
-
+    Node(){}
     Node(double in_x, double in_y) : x(in_x), y(in_y){}
 
 
@@ -74,12 +74,17 @@ class Graph{
     }
 
     void add_edges(const std::vector<std::pair<int, int>>& edges){
-      for(auto& edge:edges){
-        int a = edge.first;
-        int b = edge.second;
-        nodes[a].neighbours.insert(b);
-        nodes[b].neighbours.insert(a);
-      }
+      for(auto& edge:edges)
+        add_edge(edge);
+    }
+
+    void add_edge(std::pair<int, int> edge){
+      add_edge(edge.first, edge.second);
+    }
+
+    void add_edge(int node_a, int node_b){
+      nodes[node_a].neighbours.insert(node_b);
+      nodes[node_b].neighbours.insert(node_a);
     }
 
 };
@@ -193,9 +198,8 @@ class RoadmapManager : public rclcpp::Node
       log("Updated voronoi diagram.");
 
       update_diagram_marker();
-
       add_ids_to_vertices();
-
+      build_search_graph();
     }
 
     void add_polygon_to_boost_segments(
@@ -343,26 +347,68 @@ class RoadmapManager : public rclcpp::Node
       }
     }
 
-    // void build_search_graph(){
-    //   Graph graph;
-    //   for (int i = 0; i<vd.num_vertices(); i++) {
-    //     const voronoi_diagram<double>::vertex_type &vertex = vd.vertices()[i];
-    //     const voronoi_diagram<double>::edge_type *edge = vertex.incident_edge();
+    void build_search_graph(){
+      Graph graph;
+      for(auto itr = vd.vertices().begin(); itr != vd.vertices().end(); ++itr){
+        graph.add_node(itr->x(), itr->y());
+      }
+      for(auto itr = vd.edges().begin(); itr != vd.edges().end(); ++itr){
+        if(itr->is_infinite() || itr->is_secondary())
+          // I am not interested in infinite or secondary edges, we don't use
+          // them for navigation 
+          continue;
+        
+        auto v0 = itr->vertex0();
+        auto v1 = itr->vertex1();
+        if(itr->is_linear()){
+          graph.add_edge(v0->color(), v1->color());   
 
-    //     graph.add_node(vertex.x(), vertex.y());
+        }else{
+          // is curved
+          // boost do not have lenght data of edges, so we need to discretize them
+          std::vector<BoostPoint> points;
 
-    //     do {
-    //       if (edge->is_primary()){
-    //         auto v1 = edge->vertex1();
-    //         auto itr = std::find(vd.vertices().begin(), vd.vertices().end(), v1);
-    //         int index = std::distance(vd.vertices().begin(), itr);
+          BoostPoint vertex0(v0->x(), v0->y());
+          BoostPoint vertex1(v1->x(), v1->y());
 
-    //       }
-    //       edge = edge->rot_next();
-    //     } while (edge != vertex.incident_edge());
-    //   }
+          points.push_back(vertex0);
+          points.push_back(vertex1);
+
+          boost::polygon::voronoi_edge<double> edge = *itr;
+
+          // the process needs a specific half-segment and a specific point for the correct orientation
+          BoostPoint point = edge.cell()->contains_point() ?
+            retrieve_point(*edge.cell()) :
+            retrieve_point(*edge.twin()->cell());
+          BoostSegment segment = edge.cell()->contains_point() ?
+            retrieve_segment(*edge.twin()->cell()) :
+            retrieve_segment(*edge.cell());
+          
+          boost::polygon::voronoi_visual_utils<double>::discretize(
+          point, segment, discretization, &points);
+
+          if(points.size()==2){
+            // the edge is curved, but small enough we do not need to divide it
+            graph.add_edge(v0->color(), v1->color());
+          }else{
+            // the edge has been divided into multiple edges
+            int new_nodes = points.size()-2;
+            int first_new_index = graph.nodes.size();
+            for(int i = 1; i<points.size()-1; i++){
+              graph.add_node(points[i].x(), points[i].y());
+            }
+            int prev = v0->color();
+            for(int i = 0; i<new_nodes; i++){
+              graph.add_edge(prev,first_new_index+i);
+              prev = first_new_index+i;
+            }
+            graph.add_edge(prev,v1->color());
+          }
+        }
+
+      }
       
-    // }
+    }
     
 };
 
