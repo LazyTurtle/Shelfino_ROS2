@@ -76,5 +76,13 @@ def generate_launch_description():
             arguments=['-d', rviz_config],
             condition=IfCondition(rviz),
             remappings=remappings
-        )
+        ),
+
+        Node(
+            package='get_positions',
+            executable='get_positions',
+            namespace='shelfino2',
+            remappings=[
+            ('/tf', 'tf')],
+            ),
     ])
