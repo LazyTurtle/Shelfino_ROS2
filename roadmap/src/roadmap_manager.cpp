@@ -10,6 +10,7 @@
 #include "roadmap_interfaces/srv/path_service.hpp"
 #include "visualization_msgs/msg/marker.hpp"  
 
+#include "nav_msgs/msg/path.hpp"
 #include "geometry_msgs/msg/point32.hpp"
 #include "geometry_msgs/msg/polygon.hpp"
 #include "geometry_msgs/msg/polygon_stamped.hpp"
@@ -152,6 +153,7 @@ class Graph{
         in_open_set.erase(current);
         for(int neighbour:nodes[current].neighbours){
           double temp_g_score = e.g_score[current] + Node::distance(nodes[current], nodes[neighbour]);
+
           if(temp_g_score<e.g_score[neighbour]){
             came_from[neighbour] = current;
             e.g_score[neighbour] = temp_g_score;
@@ -193,6 +195,7 @@ class RoadmapManager : public rclcpp::Node
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr gates_subscriber;
 
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr diagram_publisher;
+    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher;
 
     rclcpp::TimerBase::SharedPtr timer_;
 
@@ -204,7 +207,8 @@ class RoadmapManager : public rclcpp::Node
     std::shared_ptr<obstacles_msgs::msg::ObstacleArrayMsg> obstacles_msg;
     std::shared_ptr<geometry_msgs::msg::PoseArray> gates_msg;
 
-    visualization_msgs::msg::Marker vd_marker;    
+    visualization_msgs::msg::Marker vd_marker;
+    nav_msgs::msg::Path calculated_path; 
 
     voronoi_diagram<double> vd;
     Graph search_graph;
@@ -236,8 +240,11 @@ class RoadmapManager : public rclcpp::Node
       diagram_publisher = this->create_publisher<visualization_msgs::msg::Marker>(
         "voronoi_diagram", qos);
 
+      path_publisher = this->create_publisher<nav_msgs::msg::Path>(
+        "path", qos);
+
       auto interval = 1000ms;
-      timer_ = this->create_wall_timer(interval, std::bind(&RoadmapManager::publish_diagram_marker, this));
+      timer_ = this->create_wall_timer(interval, std::bind(&RoadmapManager::publish_data, this));
     }
 
     void log(std::string log_str){
@@ -256,10 +263,31 @@ class RoadmapManager : public rclcpp::Node
       gates_msg = msg;
     }
 
+    void publish_data(){
+      diagram_publisher->publish(vd_marker);
+      path_publisher->publish(calculated_path);
+    }
+
     void test(
       const std::shared_ptr<std_srvs::srv::Empty_Request> request,
       std::shared_ptr<std_srvs::srv::Empty_Response> response){
       update_voronoi_diagram();
+
+      int closest_node_to_start = search_graph.find_closest(-1, -4);
+      int closest_node_to_end = search_graph.find_closest(4, 2);
+      std::vector<int> path_int = search_graph.find_path(closest_node_to_start, closest_node_to_end);
+      nav_msgs::msg::Path path;
+      path.header.frame_id="map";
+      path.header.stamp = this->now();
+      for(int i: path_int){
+        geometry_msgs::msg::PoseStamped pose;
+        pose.header.frame_id="map";
+        pose.header.stamp = this->now();
+        pose.pose.position.x = search_graph.nodes[i].x;
+        pose.pose.position.y = search_graph.nodes[i].y;
+        path.poses.push_back(pose);
+      }
+      calculated_path = path;
     }
 
     void update_voronoi_diagram(){
@@ -333,21 +361,14 @@ class RoadmapManager : public rclcpp::Node
     void compute_path(
       const std::shared_ptr<roadmap_interfaces::srv::PathService_Request> request,
       std::shared_ptr<roadmap_interfaces::srv::PathService_Response> response){
-        response->result = false;
+      response->result = false;
       double x_start = request->start.x;
       double y_start = request->start.y;
       double x_end = request->end.x;
       double y_end = request->end.y;
-      int closest_node_to_start = search_graph.find_closest(x_start, y_start);
-      int closest_node_to_end = search_graph.find_closest(x_end, y_end);
+      int closest_node_to_start = search_graph.find_closest(-1, -4);
+      int closest_node_to_end = search_graph.find_closest(4, 2);
       std::vector<int> path = search_graph.find_path(closest_node_to_start, closest_node_to_end);
-
-    }
-
-
-
-    void publish_diagram_marker(){
-      diagram_publisher->publish(vd_marker);
     }
 
     void update_diagram_marker(){        
@@ -381,9 +402,7 @@ class RoadmapManager : public rclcpp::Node
       }
 
       vd_marker = marker;
-      std::ostringstream s;
-      s << "Updated marker.";
-      log(s.str());
+      log("Updated voronoi graph marker.");
     }
 
     BoostPoint retrieve_point(const boost::polygon::voronoi_cell<double>& cell) {
