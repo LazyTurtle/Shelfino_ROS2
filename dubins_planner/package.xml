@@ -17,7 +17,7 @@
   <depend>tf2_ros</depend>
   <depend>rclcpp_components</depend>
   <depend>rclcpp_action</depend>
-  <depend>dubins_planning_msgs</depend>
+  <depend>dubins_planner_msgs</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
