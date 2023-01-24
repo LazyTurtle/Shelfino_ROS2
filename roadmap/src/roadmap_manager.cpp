@@ -2,6 +2,8 @@
 #include <memory>
 #include <vector>
 #include <set>
+#include <queue>
+#include <map>
 #include <algorithm>
 #include "rclcpp/rclcpp.hpp"
 #include "std_srvs/srv/empty.hpp"
@@ -31,15 +33,16 @@ typedef boost::polygon::segment_data<double> BoostSegment;
 using namespace std::chrono_literals;
 
 class Node{
-
-  static double distance(Node& a, Node& b){
-    double x = a.x - b.x;
-    double y = a.y - b.y;
-    double d = std::sqrt(std::pow(x,2)+std::pow(y,2)); 
-    return d; 
-  }  
-
   public:
+    static double distance(Node& a, Node& b){
+      return distance(a.x, a.y, b.x, b.y); 
+    }
+    static double distance(double ax, double ay, double bx, double by){
+      double x = ax - bx;
+      double y = ay - by;
+      double d = std::sqrt(std::pow(x,2)+std::pow(y,2)); 
+      return d; 
+    }
 
     double x, y;
     std::set<int> neighbours;
@@ -86,7 +89,93 @@ class Graph{
       nodes[node_a].neighbours.insert(node_b);
       nodes[node_b].neighbours.insert(node_a);
     }
+  
+    int find_closest(double x, double y){
+      int closest = -1;
+      double min_dist = std::numeric_limits<double>().infinity();
+      for(int i=0; i<nodes.size(); i++){
+        double dist = Node::distance(x,y,nodes[i].x,nodes[i].y);
+        if(dist<min_dist){
+          min_dist = dist;
+          closest = i;
+        }
+      }
+      return closest;
+    }
 
+    std::vector<int> find_path(int start, int end){
+      class Estimate{
+        bool reverse;
+        public:
+          // optimistic estimate of the distance between node n and node end
+          std::vector<double> heuristic;
+          // current minimum distance from node start to node n
+          std::vector<double> g_score;
+          // current best guess from start to finish, = g_score + heuristic
+          std::vector<double> f_score;
+
+          Estimate(int start, int end, Graph* graph, const bool& revparam=false){
+            reverse=revparam;
+
+            for(int i = 0; i<graph->nodes.size(); i++){
+              heuristic.push_back(Node::distance(graph->nodes[end],graph->nodes[i]));
+            }
+
+            g_score = std::vector<double>(graph->nodes.size(), std::numeric_limits<double>().infinity());
+            g_score[start] = 0;
+
+            f_score = std::vector<double>(graph->nodes.size(), std::numeric_limits<double>().infinity());
+            f_score[start] = heuristic[start];
+          }
+
+          bool operator() (const int& lhs, const int& rhs) const
+          {
+            if (reverse) return (f_score[lhs]>f_score[rhs]);
+            else return (f_score[lhs]<f_score[rhs]);
+          }
+      };
+
+      std::map<int,int> came_from;
+      Estimate e(start, end, this);
+      std::priority_queue<int, std::vector<int>, Estimate> open_set(e);
+      std::set<int> in_open_set; // I need this only because priority_queue does not have lookup methods
+      open_set.push(start);
+      in_open_set.insert(start);
+
+      while(!open_set.empty()){
+        int current = open_set.top();
+
+        if(current == end)
+          return reconstruct_path(came_from, current);
+
+        open_set.pop();
+        in_open_set.erase(current);
+        for(int neighbour:nodes[current].neighbours){
+          double temp_g_score = e.g_score[current] + Node::distance(nodes[current], nodes[neighbour]);
+          if(temp_g_score<e.g_score[neighbour]){
+            came_from[neighbour] = current;
+            e.g_score[neighbour] = temp_g_score;
+            e.f_score[neighbour] = e.g_score[neighbour] + e.heuristic[neighbour];
+            if(in_open_set.count(neighbour)==0){
+              open_set.push(neighbour);
+              in_open_set.insert(neighbour);
+            }
+          }
+        }
+      }
+
+      std::vector<int> empty_path;
+      return empty_path;
+    }
+    std::vector<int> reconstruct_path(std::map<int,int>& came_from_map, int current){
+      std::vector<int> path;
+      path.push_back(current);
+      while(came_from_map.find(current)!=came_from_map.end()){
+        current = came_from_map[current];
+        path.insert(path.begin(), current);
+      }
+      return path;
+    }
 };
 
 class RoadmapManager : public rclcpp::Node
@@ -245,7 +334,17 @@ class RoadmapManager : public rclcpp::Node
       const std::shared_ptr<roadmap_interfaces::srv::PathService_Request> request,
       std::shared_ptr<roadmap_interfaces::srv::PathService_Response> response){
         response->result = false;
+      double x_start = request->start.x;
+      double y_start = request->start.y;
+      double x_end = request->end.x;
+      double y_end = request->end.y;
+      int closest_node_to_start = search_graph.find_closest(x_start, y_start);
+      int closest_node_to_end = search_graph.find_closest(x_end, y_end);
+      std::vector<int> path = search_graph.find_path(closest_node_to_start, closest_node_to_end);
+
     }
+
+
 
     void publish_diagram_marker(){
       diagram_publisher->publish(vd_marker);
