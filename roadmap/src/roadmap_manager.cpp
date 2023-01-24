@@ -197,9 +197,9 @@ class RoadmapManager : public rclcpp::Node
       
       log("Updated voronoi diagram.");
 
-      update_diagram_marker();
       add_ids_to_vertices();
-      build_search_graph();
+      search_graph = build_search_graph();
+      update_diagram_marker();
     }
 
     void add_polygon_to_boost_segments(
@@ -267,51 +267,20 @@ class RoadmapManager : public rclcpp::Node
       marker.color.g = 0.5;
       marker.color.b = 0.5;
 
-      for (voronoi_diagram<double>::const_edge_iterator it = vd.edges().begin(); it != vd.edges().end(); ++it) {
-        
-        if (it->is_primary() && it->is_finite()){
-          // we don't really care about the secondary ones since we can't use
-          // them to navigate, and the infinite ones which are unfeasible
-          if(it->is_linear()){
-            auto edge = *it;
-            geometry_msgs::msg::Point a = v2g_p(*edge.vertex0(), scale);
-            geometry_msgs::msg::Point b = v2g_p(*edge.vertex1(), scale);
-            marker.points.push_back(a);
-            marker.points.push_back(b);
-
-          }else{
-            // is curved
-            std::vector<BoostPoint> points;
-
-            BoostPoint vertex0(it->vertex0()->x(), it->vertex0()->y());
-            BoostPoint vertex1(it->vertex1()->x(), it->vertex1()->y());
-
-            points.push_back(vertex0);
-            points.push_back(vertex1);
-
-            boost::polygon::voronoi_edge<double> edge = *it;
-
-            // the process needs a segment and a specific point for the orientation
-            BoostPoint point = edge.cell()->contains_point() ?
-              retrieve_point(*edge.cell()) :
-              retrieve_point(*edge.twin()->cell());
-            BoostSegment segment = edge.cell()->contains_point() ?
-              retrieve_segment(*edge.twin()->cell()) :
-              retrieve_segment(*edge.cell());
-            
-            boost::polygon::voronoi_visual_utils<double>::discretize(
-            point, segment, discretization, &points);
-
-            for(int i = 0; i<points.size()-1; i++){
-              geometry_msgs::msg::Point ma = b2g_p(points[i], scale);
-              geometry_msgs::msg::Point mb = b2g_p(points[i+1], scale);
-              marker.points.push_back(ma);
-              marker.points.push_back(mb);
-            }
-          }
-
+      for(auto node:search_graph.nodes){
+        for(auto neighbour:node.neighbours){
+          // TODO: use BFS in order to only produce a single segment for edge
+          geometry_msgs::msg::Point ma;
+          geometry_msgs::msg::Point mb;
+          ma.x = node.x;
+          ma.y = node.y;
+          mb.x = search_graph.nodes[neighbour].x;
+          mb.y = search_graph.nodes[neighbour].y;
+          marker.points.push_back(ma);
+          marker.points.push_back(mb);
         }
       }
+
       vd_marker = marker;
       std::ostringstream s;
       s << "Updated marker.";
@@ -347,10 +316,10 @@ class RoadmapManager : public rclcpp::Node
       }
     }
 
-    void build_search_graph(){
+    Graph build_search_graph(){
       Graph graph;
       for(auto itr = vd.vertices().begin(); itr != vd.vertices().end(); ++itr){
-        graph.add_node(itr->x(), itr->y());
+        graph.add_node(itr->x()/scale, itr->y()/scale);
       }
       for(auto itr = vd.edges().begin(); itr != vd.edges().end(); ++itr){
         if(itr->is_infinite() || itr->is_secondary())
@@ -395,7 +364,7 @@ class RoadmapManager : public rclcpp::Node
             int new_nodes = points.size()-2;
             int first_new_index = graph.nodes.size();
             for(int i = 1; i<points.size()-1; i++){
-              graph.add_node(points[i].x(), points[i].y());
+              graph.add_node(points[i].x()/scale, points[i].y()/scale);
             }
             int prev = v0->color();
             for(int i = 0; i<new_nodes; i++){
@@ -407,7 +376,7 @@ class RoadmapManager : public rclcpp::Node
         }
 
       }
-      
+      return graph;
     }
     
 };
