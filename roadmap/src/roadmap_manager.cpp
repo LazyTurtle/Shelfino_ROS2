@@ -276,37 +276,36 @@ class RoadmapManager : public rclcpp::Node
       std::shared_ptr<std_srvs::srv::Empty_Response> response){
       update_voronoi_diagram();
 
-      // int closest_node_to_start = search_graph.find_closest(-1, -4);
-      // int closest_node_to_end = search_graph.find_closest(4, 2);
-      // std::vector<int> path_int = search_graph.find_path(closest_node_to_start, closest_node_to_end);
-      // nav_msgs::msg::Path path;
-      // path.header.frame_id="map";
-      // path.header.stamp = this->now();
-      // for(int i: path_int){
-      //   geometry_msgs::msg::PoseStamped pose;
-      //   pose.header.frame_id="map";
-      //   pose.header.stamp = this->now();
-      //   pose.pose.position.x = search_graph.nodes[i].x;
-      //   pose.pose.position.y = search_graph.nodes[i].y;
-      //   path.poses.push_back(pose);
-      // }
-      // calculated_path = path;
-      std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("dubins_calculator_client");
-      rclcpp::Client<dubins_planner_msgs::srv::DubinsPlanning>::SharedPtr client =
-        client_node->create_client<dubins_planner_msgs::srv::DubinsPlanning>("dubins_calculator");
+      int closest_node_to_start = search_graph.find_closest(-1, -4);
+      int closest_node_to_end = search_graph.find_closest(4, 2);
+      std::vector<int> path_int = search_graph.find_path(closest_node_to_start, closest_node_to_end);
+
+      std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("multi_points_dubins_calculator_client");
+      rclcpp::Client<dubins_planner_msgs::srv::MultiPointDubinsPlanning>::SharedPtr client =
+        client_node->create_client<dubins_planner_msgs::srv::MultiPointDubinsPlanning>("multi_points_dubins_calculator");
       
-      dubins_planner_msgs::msg::DubinsPoint a, b;
-      a.point.x=-1;
-      a.point.y=-4;
-      a.angle = 1;
-      b.point.x=3;
-      b.point.y=2;
-      b.angle=2;
-      
-      auto r = std::make_shared<dubins_planner_msgs::srv::DubinsPlanning::Request>();
-      r->start = a;
-      r->end = b;
-      r->kmax = 3;
+      auto r = std::make_shared<dubins_planner_msgs::srv::MultiPointDubinsPlanning::Request>();
+
+      std::vector<geometry_msgs::msg::Point> path_geo;
+      geometry_msgs::msg::Point p;
+      p.x = -1;
+      p.y = -4;
+      path_geo.push_back(p);
+      for(int i:path_int){
+        geometry_msgs::msg::Point p;
+        p.x = search_graph.nodes[i].x;
+        p.y = search_graph.nodes[i].y;
+        path_geo.push_back(p);
+      }
+      p.x = 4;
+      p.y = 2;
+      path_geo.push_back(p);
+
+      r->points = path_geo;
+      r->angle = 0.0;
+      r->kmax = 5;
+      r->komega = 8;
+
       while (!client->wait_for_service(3s)) {
         if (!rclcpp::ok()) {
         RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Interrupted while waiting for the service. Exiting.");
