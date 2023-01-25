@@ -302,8 +302,7 @@ class RoadmapManager : public rclcpp::Node
       path_geo.push_back(p);
 
       r->points = path_geo;
-      r->angle = 0.0;
-      r->kmax = 5;
+      r->kmax = 6;
       r->komega = 8;
 
       while (!client->wait_for_service(3s)) {
