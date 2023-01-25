@@ -19,6 +19,7 @@
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
+  <depend>dubins_planner_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>roadmap_interfaces</depend>
   <depend>visualization_msgs</depend>

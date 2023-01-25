@@ -7,9 +7,13 @@
 #include <algorithm>
 #include "rclcpp/rclcpp.hpp"
 #include "std_srvs/srv/empty.hpp"
+
+#include "dubins_planner_msgs/msg/dubins_point.hpp"
+#include "dubins_planner_msgs/srv/dubins_planning.hpp"
+#include "dubins_planner_msgs/srv/multi_point_dubins_planning.hpp"
+
 #include "roadmap_interfaces/srv/path_service.hpp"
 #include "visualization_msgs/msg/marker.hpp"  
-
 #include "nav_msgs/msg/path.hpp"
 #include "geometry_msgs/msg/point32.hpp"
 #include "geometry_msgs/msg/polygon.hpp"
@@ -199,7 +203,6 @@ class RoadmapManager : public rclcpp::Node
 
     rclcpp::TimerBase::SharedPtr timer_;
 
-
     rclcpp::Service<roadmap_interfaces::srv::PathService>::SharedPtr path_service;
     rclcpp::Service<std_srvs::srv::Empty>::SharedPtr test_service;
 
@@ -273,21 +276,53 @@ class RoadmapManager : public rclcpp::Node
       std::shared_ptr<std_srvs::srv::Empty_Response> response){
       update_voronoi_diagram();
 
-      int closest_node_to_start = search_graph.find_closest(-1, -4);
-      int closest_node_to_end = search_graph.find_closest(4, 2);
-      std::vector<int> path_int = search_graph.find_path(closest_node_to_start, closest_node_to_end);
-      nav_msgs::msg::Path path;
-      path.header.frame_id="map";
-      path.header.stamp = this->now();
-      for(int i: path_int){
-        geometry_msgs::msg::PoseStamped pose;
-        pose.header.frame_id="map";
-        pose.header.stamp = this->now();
-        pose.pose.position.x = search_graph.nodes[i].x;
-        pose.pose.position.y = search_graph.nodes[i].y;
-        path.poses.push_back(pose);
+      // int closest_node_to_start = search_graph.find_closest(-1, -4);
+      // int closest_node_to_end = search_graph.find_closest(4, 2);
+      // std::vector<int> path_int = search_graph.find_path(closest_node_to_start, closest_node_to_end);
+      // nav_msgs::msg::Path path;
+      // path.header.frame_id="map";
+      // path.header.stamp = this->now();
+      // for(int i: path_int){
+      //   geometry_msgs::msg::PoseStamped pose;
+      //   pose.header.frame_id="map";
+      //   pose.header.stamp = this->now();
+      //   pose.pose.position.x = search_graph.nodes[i].x;
+      //   pose.pose.position.y = search_graph.nodes[i].y;
+      //   path.poses.push_back(pose);
+      // }
+      // calculated_path = path;
+      std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("dubins_calculator_client");
+      rclcpp::Client<dubins_planner_msgs::srv::DubinsPlanning>::SharedPtr client =
+        client_node->create_client<dubins_planner_msgs::srv::DubinsPlanning>("dubins_calculator");
+      
+      dubins_planner_msgs::msg::DubinsPoint a, b;
+      a.point.x=-1;
+      a.point.y=-4;
+      a.angle = 1;
+      b.point.x=3;
+      b.point.y=2;
+      b.angle=2;
+      
+      auto r = std::make_shared<dubins_planner_msgs::srv::DubinsPlanning::Request>();
+      r->start = a;
+      r->end = b;
+      r->kmax = 3;
+      while (!client->wait_for_service(3s)) {
+        if (!rclcpp::ok()) {
+        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Interrupted while waiting for the service. Exiting.");
+        return;
+        }
+        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "service not available, waiting again...");
       }
-      calculated_path = path;
+
+      auto result = client->async_send_request(r);
+      // Wait for the result.
+      if (rclcpp::spin_until_future_complete(client_node, result) == rclcpp::FutureReturnCode::SUCCESS){
+        calculated_path = result.get()->path;
+      } else {
+        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed to call service add_two_ints");
+      }
+
     }
 
     void update_voronoi_diagram(){
