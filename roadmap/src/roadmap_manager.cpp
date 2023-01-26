@@ -65,7 +65,7 @@ class Graph{
     std::vector<Node> nodes;
 
     Graph(){}
-    
+
     void add_node(double x, double y){
       Node n(x,y);
       nodes.push_back(n);
@@ -568,7 +568,7 @@ class RoadmapManager : public rclcpp::Node
         auto v1 = itr->vertex1();
         if(itr->is_linear()){
           
-          double edge_width = find_edge_width(*itr);
+          double edge_width = find_edge_width(*itr, scale);
           graph.add_edge(v0->color(), v1->color(), edge_width);
 
         }else{
@@ -598,7 +598,7 @@ class RoadmapManager : public rclcpp::Node
           // TODO: I have no idea how to handle very long curves
           // I only have data about the end points and all I can do are averages
           // or being conservative and always choose the smallest one
-          double edge_width = find_edge_width(*itr);
+          double edge_width = find_edge_width(*itr, scale);
 
           if(points.size()==2){
             // the edge is curved, but small enough we do not need to divide it
@@ -623,39 +623,39 @@ class RoadmapManager : public rclcpp::Node
       return graph;
     }
 
-    double find_edge_width(boost::polygon::voronoi_edge<double> edge){
+    double find_edge_width(boost::polygon::voronoi_edge<double> edge, double scale){
       // small functions to help here
       auto dist = [](double ax, double ay, double bx, double by){
         double dist = std::sqrt(std::pow(ax - bx, 2)+std::pow(ay - by,2));
         return dist;
       };
-      auto dist_pe = [dist](BoostPoint& point, boost::polygon::voronoi_edge<double>& edge){
+      auto dist_pe = [dist, scale](BoostPoint& point, boost::polygon::voronoi_edge<double>& edge){
         double mean_x = (edge.vertex0()->x() + edge.vertex1()->x())/2.0;
         double mean_y = (edge.vertex0()->y() + edge.vertex1()->y())/2.0;
-        double distance = dist(point.x(), point.y(), mean_x, mean_y);
+        double distance = dist(point.x(), point.y(), mean_x, mean_y)/scale;
         return distance;
       };
-      auto dist_ee = [dist](boost::polygon::voronoi_edge<double>& a, boost::polygon::voronoi_edge<double>& b){
-        double a_x = (a.vertex0()->x() + a.vertex1()->x())/2.0;
-        double a_y = (a.vertex0()->y() + a.vertex1()->y())/2.0;
-        double b_x = (b.vertex0()->x() + b.vertex1()->x())/2.0;
-        double b_y = (b.vertex0()->y() + b.vertex1()->y())/2.0;
+      auto dist_ee = [dist, scale](boost::polygon::voronoi_edge<double>& a, boost::polygon::voronoi_edge<double>& b){
+        double a_x = (a.vertex0()->x() + a.vertex1()->x())/2.0/scale;
+        double a_y = (a.vertex0()->y() + a.vertex1()->y())/2.0/scale;
+        double b_x = (b.vertex0()->x() + b.vertex1()->x())/2.0/scale;
+        double b_y = (b.vertex0()->y() + b.vertex1()->y())/2.0/scale;
         double distance = dist(a_x, a_y, b_x, b_y);
         return distance;
       };
-      auto min_dist_pe = [dist](BoostPoint& point, boost::polygon::voronoi_edge<double>& edge){
-        double dist_0 = dist(point.x(), edge.vertex0()->x(), point.y(), edge.vertex0()->y());
-        double dist_1 = dist(point.x(), edge.vertex1()->x(), point.y(), edge.vertex1()->y());
+      auto min_dist_pe = [dist, scale](BoostPoint& point, boost::polygon::voronoi_edge<double>& edge){
+        double dist_0 = dist(point.x(), edge.vertex0()->x(), point.y(), edge.vertex0()->y())/scale;
+        double dist_1 = dist(point.x(), edge.vertex1()->x(), point.y(), edge.vertex1()->y())/scale;
         double minimum = std::min(dist_0, dist_1);
         return minimum;
       };
-      auto min_dist_ee = [dist](boost::polygon::voronoi_edge<double>& a, boost::polygon::voronoi_edge<double>& b){
-        double dist_00 = dist(a.vertex0()->x(), a.vertex0()->y(), b.vertex0()->x(), b.vertex0()->y());
-        double dist_01 = dist(a.vertex0()->x(), a.vertex0()->y(), b.vertex1()->x(), b.vertex1()->y());
-        double dist_10 = dist(a.vertex1()->x(), a.vertex1()->y(), b.vertex0()->x(), b.vertex0()->y());
-        double dist_11 = dist(a.vertex1()->x(), a.vertex1()->y(), b.vertex1()->x(), b.vertex1()->y());
-        double minimum = std::min(dist_00, dist_01, dist_10);
-        minimum = std::min(minimum, dist_11);
+      auto min_dist_ee = [dist, scale](boost::polygon::voronoi_edge<double>& a, boost::polygon::voronoi_edge<double>& b){
+        double dist_00 = dist(a.vertex0()->x(), a.vertex0()->y(), b.vertex0()->x(), b.vertex0()->y())/scale;
+        double dist_01 = dist(a.vertex0()->x(), a.vertex0()->y(), b.vertex1()->x(), b.vertex1()->y())/scale;
+        double dist_10 = dist(a.vertex1()->x(), a.vertex1()->y(), b.vertex0()->x(), b.vertex0()->y())/scale;
+        double dist_11 = dist(a.vertex1()->x(), a.vertex1()->y(), b.vertex1()->x(), b.vertex1()->y())/scale;
+        auto min_v = {dist_00, dist_01, dist_10, dist_11};
+        auto minimum = std::min_element(min_v.begin(), min_v.end());
         return minimum;
       };
 
