@@ -51,6 +51,7 @@ class Node{
 
     double x, y;
     std::set<int> neighbours;
+    std::map<int, double> edge_width;
     Node(){}
     Node(double in_x, double in_y) : x(in_x), y(in_y){}
 
@@ -546,18 +547,22 @@ class RoadmapManager : public rclcpp::Node
     Graph build_search_graph(){
       Graph graph;
       for(auto itr = vd.vertices().begin(); itr != vd.vertices().end(); ++itr){
-        graph.add_node(itr->x()/scale, itr->y()/scale);
+        double v_x = itr->x()/scale;
+        double v_y = itr->y()/scale;
+        graph.add_node(v_x, v_y);
       }
       for(auto itr = vd.edges().begin(); itr != vd.edges().end(); ++itr){
         if(itr->is_infinite() || itr->is_secondary())
           // I am not interested in infinite or secondary edges, we don't use
           // them for navigation 
           continue;
-        
+
         auto v0 = itr->vertex0();
         auto v1 = itr->vertex1();
         if(itr->is_linear()){
-          graph.add_edge(v0->color(), v1->color());   
+          
+          double edge_width = find_edge_width(*itr);
+          graph.add_edge(v0->color(), v1->color());
 
         }else{
           // is curved
@@ -604,6 +609,48 @@ class RoadmapManager : public rclcpp::Node
 
       }
       return graph;
+    }
+
+    double find_edge_width(boost::polygon::voronoi_edge<double> edge){
+      // small functions to help here
+      auto distance = [](BoostPoint& point, boost::polygon::voronoi_edge<double>& edge){
+        double mean_x = (edge.vertex0()->x() + edge.vertex1()->x())/2.0;
+        double mean_y = (edge.vertex0()->y() + edge.vertex1()->y())/2.0;
+        double dist = std::sqrt(std::pow(mean_x - point.x(),2)+std::pow(mean_y - point.y(),2));
+        return dist;
+      };
+
+      boost::polygon::voronoi_cell<double>* cell = edge.cell();
+      if (cell->contains_point()) {
+        if(cell->source_category()==boost::polygon::SOURCE_CATEGORY_SINGLE_POINT) {
+          std::size_t index = cell->source_index();
+          BoostPoint p = points_data[index];
+          double d = distance(p,edge);
+          return d;
+
+        }else if(cell->source_category()==boost::polygon::SOURCE_CATEGORY_SEGMENT_START_POINT) {
+          std::size_t index = cell->source_index() - points_data.size();
+          BoostPoint p0 = low(segments_data[index]);
+          double d = distance(p0, edge);
+          return d;
+
+        }else if(cell->source_category()==boost::polygon::SOURCE_CATEGORY_SEGMENT_END_POINT) {
+          std::size_t index = cell->source_index() - points_data.size();
+          BoostPoint p1 = high(segments_data[index]);
+          double d = distance(p1, edge);
+          return d;
+        }
+      }else{
+        std::size_t index = cell->source_index() - points_data.size();
+        BoostPoint p0 = low(segments_data[index]);
+        BoostPoint p1 = high(segments_data[index]);
+        double mean_p_x = (p0.x() + p1.x())/2.0;
+        double mean_p_y = (p0.y() + p1.y())/2.0;
+        double mean_x = (edge.vertex0()->x() + edge.vertex1()->x())/2.0;
+        double mean_y = (edge.vertex0()->y() + edge.vertex1()->y())/2.0;
+        double dist = std::sqrt(std::pow(mean_x - mean_p_x,2)+std::pow(mean_y - mean_p_y,2));
+        return dist;
+      }
     }
     
 };
