@@ -16,6 +16,7 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(rclcpp_action REQUIRED)
+find_package(dubins_planner_msgs REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
@@ -35,12 +36,23 @@ ament_target_dependencies(dubins_planner
   rclcpp_action
 )
 
+add_executable(dubins_service
+  src/dubins_service.cpp
+)
+ament_target_dependencies(dubins_service
+  rclcpp 
+  std_msgs 
+  nav_msgs 
+  dubins_planner_msgs 
+  geometry_msgs)
+
 install(DIRECTORY 
-        launch
+  launch
   DESTINATION share/${PROJECT_NAME})
 
 install(TARGETS
   dubins_planner
+  dubins_service
   DESTINATION lib/${PROJECT_NAME})
 
 ament_package()

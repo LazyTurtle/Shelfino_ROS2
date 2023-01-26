@@ -16,6 +16,7 @@
   <depend>send_gates</depend>
   <depend>send_borders</depend>
   <depend>launch_ros</depend>
+  <exec_depend>ros2launch</exec_depend>
 
 
 

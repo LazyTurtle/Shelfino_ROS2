@@ -1,5 +1,15 @@
 cmake_minimum_required(VERSION 3.5)
-project(roadmap)
+project(dubins_calculator)
+
+# Default to C99
+if(NOT CMAKE_C_STANDARD)
+  set(CMAKE_C_STANDARD 99)
+endif()
+
+# Default to C++14
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 14)
+endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -9,39 +19,9 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(std_srvs REQUIRED)
 find_package(nav_msgs REQUIRED)
-find_package(geometry_msgs REQUIRED)
-find_package(obstacles_msgs REQUIRED)
-find_package(roadmap_interfaces REQUIRED)
-find_package(visualization_msgs REQUIRED)
-find_package(dubins_planner REQUIRED)
 find_package(dubins_planner_msgs REQUIRED)
 
-
-include_directories(include)
-
-add_executable(roadmap_manager src/roadmap_manager.cpp)
-ament_target_dependencies(roadmap_manager 
-  rclcpp 
-  nav_msgs 
-  std_msgs 
-  geometry_msgs 
-  obstacles_msgs 
-  roadmap_interfaces 
-  std_srvs 
-  visualization_msgs
-  dubins_planner
-  dubins_planner_msgs
-  )
-
-target_include_directories(roadmap_manager PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
-
-install(TARGETS
-  roadmap_manager
-  DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -53,5 +33,23 @@ if(BUILD_TESTING)
   #set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
+
+add_executable(publisher_node src/publisher.cpp)
+add_executable(dubins_calculator src/dubins_calculator.cpp)
+
+
+install(TARGETS
+  publisher_node
+  dubins_calculator
+  DESTINATION lib/${PROJECT_NAME})
+
+install(DIRECTORY
+launch
+DESTINATION share/${PROJECT_NAME}/
+)
+
+ament_target_dependencies(publisher_node rclcpp std_msgs nav_msgs dubins_planner_msgs geometry_msgs)
+ament_target_dependencies(dubins_calculator rclcpp std_msgs nav_msgs dubins_planner_msgs geometry_msgs)
+
 
 ament_package()

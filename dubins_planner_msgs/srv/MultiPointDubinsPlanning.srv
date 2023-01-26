@@ -1,0 +1,8 @@
+geometry_msgs/Point[] points
+float64 angle -1.0  # in [0, 2*PI], negative indicate no preference
+float64 kmax
+uint32 komega 4
+uint32 refinements 3
+---
+nav_msgs/Path path
+float64 lenght

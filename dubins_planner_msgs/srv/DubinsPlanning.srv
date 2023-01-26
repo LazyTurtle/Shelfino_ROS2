@@ -1,0 +1,6 @@
+dubins_planner_msgs/DubinsPoint start
+dubins_planner_msgs/DubinsPoint end
+float64 kmax
+---
+nav_msgs/Path path
+float64 lenght
