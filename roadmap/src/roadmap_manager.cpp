@@ -108,7 +108,7 @@ class Graph{
       return closest;
     }
 
-    std::vector<int> find_path(int start, int end){
+    std::vector<int> find_path(int start, int end, double tollerance = 0.0){
       class Estimate{
         bool reverse;
         public:
@@ -151,7 +151,7 @@ class Graph{
         int current = open_set.top();
 
         if(current == end)
-          return reconstruct_path(came_from, current);
+          return reconstruct_path(came_from, current, tollerance);
 
         open_set.pop();
         in_open_set.erase(current);
@@ -173,12 +173,20 @@ class Graph{
       std::vector<int> empty_path;
       return empty_path;
     }
-    std::vector<int> reconstruct_path(std::map<int,int>& came_from_map, int current){
+
+    std::vector<int> reconstruct_path(std::map<int,int>& came_from_map, int current, double tollerance = 0.0){
       std::vector<int> path;
       path.push_back(current);
+      int last_valid_current = current;
+
       while(came_from_map.find(current)!=came_from_map.end()){
         current = came_from_map[current];
-        path.insert(path.begin(), current);
+
+        if(Node::distance(nodes[current],nodes[last_valid_current]) > tollerance){
+          path.insert(path.begin(), current);
+          last_valid_current = current;
+        }
+
       }
       return path;
     }
@@ -286,9 +294,12 @@ class RoadmapManager : public rclcpp::Node
       log("Start testing.");
       update_voronoi_diagram();
 
+
       int closest_node_to_start = search_graph.find_closest(-1, -4);
       int closest_node_to_end = search_graph.find_closest(4, 2);
-      std::vector<int> path_int = search_graph.find_path(closest_node_to_start, closest_node_to_end);
+      double tollerance = 0.3;
+      
+      std::vector<int> path_int = search_graph.find_path(closest_node_to_start, closest_node_to_end, tollerance);
 
       std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("multi_points_dubins_calculator_client");
       rclcpp::Client<dubins_planner_msgs::srv::MultiPointDubinsPlanning>::SharedPtr client =
