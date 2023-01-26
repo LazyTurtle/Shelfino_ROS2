@@ -181,12 +181,44 @@ class DubinsCalculator : public rclcpp::Node
             temp_path.poses.begin(), temp_path.poses.end());
         }
         {
-        std::stringstream s;
-        s << "Multi point dubins path calculation compleated.\n";
-        s << "Poses: "<<response->path.poses.size()<<"\n";
-        s << "Lenght: "<<response->lenght<<"\n";
-        log_info(s.str());
+          // -1,1
+          // 1 + 1 = 2
+          // 2/8 = 0.25
+          // 0, 0.25, 0.50, 0.75, 1.0, 1.25, 1.50, 1.75, 2
+          std::stringstream s;
+          s << "Multi point dubins path calculation compleated.\n";
+          s << "Poses: "<<response->path.poses.size()<<"\n";
+          s << "Lenght: "<<response->lenght<<"\n";
+          log_info(s.str());
         }
+
+        // let's start from the second last one
+        float h = 2*PI/omega;
+        float bound = (3/2)*h;
+        float diff = bound/omega;
+        for(int i = waypoint_list.size()-2; i>=0; i--){
+          DubinsCurve temp_min_curve;
+          temp_min_curve.L = std::numeric_limits<double>::max();
+
+          for(float j= (-bound); j<=bound; j+=diff){
+            float local_angle = thetas[i]+j;
+            DubinsCurve temp_curve;
+            int temp_curve_id;
+
+            std::tie(temp_curve_id, temp_curve) = dubins_shortest_path(
+              waypoint_list[i].x, waypoint_list[i].y, local_angle,
+              waypoint_list[i+1].x, waypoint_list[i+1].y, thetas[i+1],
+              Kmax);
+            
+            if(temp_curve_id>-1 && temp_curve.L<temp_min_curve.L){
+              temp_min_curve = temp_curve;
+              thetas[i] = local_angle;
+            }
+
+          }
+        }
+
+        log_info("Starting refinement of solution");
     }
 
   private:
