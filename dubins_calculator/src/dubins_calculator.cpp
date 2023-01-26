@@ -88,55 +88,55 @@ class DubinsCalculator : public rclcpp::Node
       const std::shared_ptr<dubins_planner_msgs::srv::MultiPointDubinsPlanning::Request> request,
       const std::shared_ptr<dubins_planner_msgs::srv::MultiPointDubinsPlanning::Response> response){
 
-        std::vector<geometry_msgs::msg::Point> waypoint_list = request->points;
-        double final_angle = request->angle;
-        double Kmax = request->kmax;
-        int omega = request->komega;
+      std::vector<geometry_msgs::msg::Point> waypoint_list = request->points;
+      double final_angle = request->angle;
+      double Kmax = request->kmax;
+      int omega = request->komega;
 
-        DubinsCurve minCurve;
-        minCurve.L = std::numeric_limits<double>::max();
-        std::vector<double>thetas(waypoint_list.size());
+      log_info("Number of waypoints: "+std::to_string(waypoint_list.size()));
 
-        std::vector<double>initial_angles;
-        std::vector<double>final_angles;
+      DubinsCurve minCurve;
+      minCurve.L = std::numeric_limits<double>::max();
+      std::vector<double>thetas(waypoint_list.size(), 0);
 
+      std::vector<double>initial_angles;
+      std::vector<double>final_angles;
+
+      for(int i=0;i<omega;i++){
+        double angle = ((2*PI)/omega)*i;
+        initial_angles.push_back(angle);
+      }
+
+      if(final_angle<0.0){
+        // the negative value indicates no preference
+        // the angle is in [0,2π]
         for(int i=0;i<omega;i++){
           double angle = ((2*PI)/omega)*i;
-          initial_angles.push_back(angle);
+          final_angles.push_back(angle);
         }
+      }else{
+        final_angles.push_back(final_angle);
+      }
 
-        if(final_angle<0.0){
-          // the negative value indicates no preference
-          // the angle is in [0,2π]
-          for(int i=0;i<omega;i++){
-            double angle = ((2*PI)/omega)*i;
-            final_angles.push_back(angle);
-          }
-        }else{
-          final_angles.push_back(final_angle);
-        }
-        {
-          std::ostringstream s;
-          s<<"Start looking for the path from the last point to its previous one.";
-          log_info(s.str());
-        }
-        for(auto start_angle : initial_angles){
-          for(auto end_angle : final_angles){
-            DubinsCurve temp_curve;
-            int temp_curve_id, n_wp = waypoint_list.size();
-            std::tie(temp_curve_id, temp_curve) = dubins_shortest_path(
-              waypoint_list[n_wp-2].x, waypoint_list[n_wp-2].y, start_angle,
-              waypoint_list[n_wp-1].x, waypoint_list[n_wp-1].y, end_angle,
-              Kmax);
-            
-            if(temp_curve_id>-1 && temp_curve.L<minCurve.L){
-              minCurve = temp_curve;
-              thetas.end()[-1]=end_angle;
-              thetas.end()[-2]=start_angle;
-            }
+      log_info("Start looking for the path from the last point to its previous one.");
+      
+      for(auto start_angle : initial_angles){
+        for(auto end_angle : final_angles){
+          DubinsCurve temp_curve;
+          int temp_curve_id, n_wp = waypoint_list.size();
+          std::tie(temp_curve_id, temp_curve) = dubins_shortest_path(
+            waypoint_list[n_wp-2].x, waypoint_list[n_wp-2].y, start_angle,
+            waypoint_list[n_wp-1].x, waypoint_list[n_wp-1].y, end_angle,
+            Kmax);
+          
+          if(temp_curve_id>-1 && temp_curve.L<minCurve.L){
+            minCurve = temp_curve;
+            thetas.end()[-1]=end_angle;
+            thetas.end()[-2]=start_angle;
           }
         }
-        {
+      }
+      {
         std::ostringstream s;
         if(minCurve.L<0.0){
           s<<"Can't find a path from final point x:"<<waypoint_list.back().x<<" y:"<<waypoint_list.back().y<<" to its previous one.";
@@ -146,47 +146,66 @@ class DubinsCalculator : public rclcpp::Node
           s<<"Path from final point x:"<<waypoint_list.back().x<<" y:"<<waypoint_list.back().y<<" to its previous one found.";
           log_info(s.str());
         }
-        }
-        
-        response->path = convert_to_path(minCurve);
-        response->lenght = minCurve.L;
-
-        for(int i = waypoint_list.size()-3; i>=0; i--){
+      }
+      
+      int refinements = request->refinements;
+      for(int cycle = 0; cycle<refinements+1; cycle++){
+        log_info("Refinement cycle "+std::to_string(cycle));
+        double base = 1.5*(2.0/omega);
+        double bound_ratio = std::pow(base, cycle);
+        double bound = PI*bound_ratio;
+        double diff = 2*bound/omega;
+        // let's start from the second last one
+        for(int i = waypoint_list.size()-2; i>=0; i--){
           DubinsCurve temp_min_curve;
           temp_min_curve.L = std::numeric_limits<double>::max();
+          double previous_theta = thetas[i];
 
-          for(auto start_angle : initial_angles){
+          for(double j = (-bound); j<=bound+1e-5; j+=diff){
+            double local_angle = previous_theta+j;
             DubinsCurve temp_curve;
             int temp_curve_id;
 
             std::tie(temp_curve_id, temp_curve) = dubins_shortest_path(
-              waypoint_list[i].x, waypoint_list[i].y, start_angle,
+              waypoint_list[i].x, waypoint_list[i].y, local_angle,
               waypoint_list[i+1].x, waypoint_list[i+1].y, thetas[i+1],
               Kmax);
             
             if(temp_curve_id>-1 && temp_curve.L<temp_min_curve.L){
               temp_min_curve = temp_curve;
-              thetas[i] = start_angle;
+              thetas[i] = local_angle;
             }
-            
           }
           std::ostringstream s;
-          s<<"Found path for "<<i<<"th point.";
+          s<<"Found path for "<<i<<"-th point.";
           log_info(s.str());
-
-          response->lenght += temp_min_curve.L;
-          nav_msgs::msg::Path temp_path = convert_to_path(temp_min_curve);
-          response->path.poses.insert(
-            response->path.poses.begin(), 
-            temp_path.poses.begin(), temp_path.poses.end());
         }
-        {
+      }
+
+      log_info("Creation final path.");
+
+      for(int i = 0; i<thetas.size()-1; i++){
+        DubinsCurve temp_curve;
+        int temp_curve_id;
+
+        std::tie(temp_curve_id, temp_curve) = dubins_shortest_path(
+          waypoint_list[i].x, waypoint_list[i].y, thetas[i],
+          waypoint_list[i+1].x, waypoint_list[i+1].y, thetas[i+1],
+          Kmax);
+        
+        nav_msgs::msg::Path temp_path = convert_to_path(temp_curve);
+
+        response->path.poses.insert(
+          response->path.poses.end(), temp_path.poses.begin(), temp_path.poses.end());
+        response->lenght += temp_curve.L;
+      }
+      {
         std::stringstream s;
         s << "Multi point dubins path calculation compleated.\n";
         s << "Poses: "<<response->path.poses.size()<<"\n";
         s << "Lenght: "<<response->lenght<<"\n";
         log_info(s.str());
-        }
+      }
     }
 
   private:
@@ -194,7 +213,7 @@ class DubinsCalculator : public rclcpp::Node
     std::shared_ptr<rclcpp::Service<dubins_planner_msgs::srv::MultiPointDubinsPlanning>> multi_point_dubins_service;
 
     nav_msgs::msg::Path convert_to_path(
-      const DubinsCurve& curve, const int nPoints = 10){
+      const DubinsCurve& curve, const int nPoints = 5){
         return convert_to_path(getPlotPoints(curve, nPoints));
     }
 
@@ -360,7 +379,7 @@ class DubinsCalculator : public rclcpp::Node
     }
 
     std::vector<std::tuple<double,double>> getPlotPoints(
-      const DubinsCurve& curve, const int nPoints=10){
+      const DubinsCurve& curve, const int nPoints=5){
 
         std::vector<std::tuple<double,double>> points;
         auto arc1Points = getPlotPoints(curve.a1, nPoints);
@@ -536,7 +555,7 @@ class DubinsCalculator : public rclcpp::Node
       const double x0, const double y0, const double th0,
       const double xf, const double yf, const double thf, const double Kmax){
 
-        log_info("Calculating path...");
+        // log_info("Calculating path...");
 
         double sc_th0, sc_thf, sc_Kmax, lambda;
         std::tie(sc_th0, sc_thf, sc_Kmax, lambda) = scaleToStandard(x0, y0, th0, xf, yf, thf, Kmax);
@@ -572,13 +591,13 @@ class DubinsCalculator : public rclcpp::Node
             s1, s2, s3,
             ksigns[pidx][0]*Kmax, ksigns[pidx][1]*Kmax, ksigns[pidx][2]*Kmax);
           
-          std::ostringstream s;
-          s<<"Feasible curve from x:"<<x0<<", y:"<<y0<<", th:"<<th0<<", to x:"<<xf<<", y:"<<yf<<", th:"<<thf<<" found.";
-          log_info(s.str());
+          // std::ostringstream s;
+          // s<<"Feasible curve from x:"<<x0<<", y:"<<y0<<", th:"<<th0<<", to x:"<<xf<<", y:"<<yf<<", th:"<<thf<<" found.";
+          // log_info(s.str());
         }else{
-          std::ostringstream s;
-          s<<"Feasible curve from x:"<<x0<<", y:"<<y0<<", th:"<<th0<<", to x:"<<xf<<", y:"<<yf<<", th:"<<thf<<" not found.";
-          log_warn(s.str());
+          // std::ostringstream s;
+          // s<<"Feasible curve from x:"<<x0<<", y:"<<y0<<", th:"<<th0<<", to x:"<<xf<<", y:"<<yf<<", th:"<<thf<<" not found.";
+          // log_warn(s.str());
         }
         return std::make_tuple(pidx, curve);
     }

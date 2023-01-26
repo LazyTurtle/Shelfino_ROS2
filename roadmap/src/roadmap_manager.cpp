@@ -282,6 +282,8 @@ class RoadmapManager : public rclcpp::Node
     void test(
       const std::shared_ptr<std_srvs::srv::Empty_Request> request,
       std::shared_ptr<std_srvs::srv::Empty_Response> response){
+      
+      log("Start testing.");
       update_voronoi_diagram();
 
       int closest_node_to_start = search_graph.find_closest(-1, -4);
@@ -299,6 +301,7 @@ class RoadmapManager : public rclcpp::Node
       p.x = -1;
       p.y = -4;
       path_geo.push_back(p);
+      waypoints_marker.points.push_back(p);
       for(int i:path_int){
         geometry_msgs::msg::Point p;
         p.x = search_graph.nodes[i].x;
@@ -308,12 +311,12 @@ class RoadmapManager : public rclcpp::Node
       p.x = 4;
       p.y = 2;
       path_geo.push_back(p);
-
-      //update_waypoints_marker(path_geo);
+      waypoints_marker.points.push_back(p);
 
       r->points = path_geo;
       r->kmax = 6;
-      r->komega = 8;
+      r->komega = 4;
+      r->refinements = 3;
 
       while (!client->wait_for_service(3s)) {
         if (!rclcpp::ok()) {
@@ -326,9 +329,14 @@ class RoadmapManager : public rclcpp::Node
       auto result = client->async_send_request(r);
       // Wait for the result.
       if (rclcpp::spin_until_future_complete(client_node, result) == rclcpp::FutureReturnCode::SUCCESS){
-        calculated_path = result.get()->path;
+        log("Path obtained.");
+        auto temp_path = result.get()->path;
+        temp_path.header.frame_id = "map";
+        temp_path.header.stamp = this->now();
+        
+        calculated_path = temp_path;
       } else {
-        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed to call service add_two_ints");
+        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed to call service dubins calculator");
       }
 
     }
@@ -339,6 +347,7 @@ class RoadmapManager : public rclcpp::Node
         log("Pointers not ready.");
         return;
       }
+      log("Start updating the voronoi diagram");
 
       segments_data.clear();
       points_data.clear();
