@@ -65,12 +65,7 @@ class Graph{
     std::vector<Node> nodes;
 
     Graph(){}
-    Graph(std::vector<Node> init_nodes, std::vector<std::pair<int, int>> init_edges){
-      nodes = init_nodes;
-      clean_edges();
-      add_edges(init_edges);
-    }
-
+    
     void add_node(double x, double y){
       Node n(x,y);
       nodes.push_back(n);
@@ -79,6 +74,7 @@ class Graph{
     void clean_edges(){
       for(auto& node : nodes){
         node.neighbours.clear();
+        node.edge_width.clear();
       }
     }
 
@@ -91,9 +87,20 @@ class Graph{
       add_edge(edge.first, edge.second);
     }
 
+    void add_edge(std::pair<int, int> edge, double edge_width){
+      add_edge(edge.first, edge.second);
+    }
+
     void add_edge(int node_a, int node_b){
       nodes[node_a].neighbours.insert(node_b);
       nodes[node_b].neighbours.insert(node_a);
+    }
+
+    void add_edge(int node_a, int node_b, double edge_width){
+      nodes[node_a].neighbours.insert(node_b);
+      nodes[node_b].neighbours.insert(node_a);
+      nodes[node_a].edge_width[node_b] = edge_width;
+      nodes[node_b].edge_width[node_a] = edge_width;
     }
   
     int find_closest(double x, double y){
@@ -562,7 +569,7 @@ class RoadmapManager : public rclcpp::Node
         if(itr->is_linear()){
           
           double edge_width = find_edge_width(*itr);
-          graph.add_edge(v0->color(), v1->color());
+          graph.add_edge(v0->color(), v1->color(), edge_width);
 
         }else{
           // is curved
@@ -588,9 +595,14 @@ class RoadmapManager : public rclcpp::Node
           boost::polygon::voronoi_visual_utils<double>::discretize(
           point, segment, discretization, &points);
 
+          // TODO: I have no idea how to handle very long curves
+          // I only have data about the end points and all I can do are averages
+          // or being conservative and always choose the smallest one
+          double edge_width = find_edge_width(*itr);
+
           if(points.size()==2){
             // the edge is curved, but small enough we do not need to divide it
-            graph.add_edge(v0->color(), v1->color());
+            graph.add_edge(v0->color(), v1->color(), edge_width);
           }else{
             // the edge has been divided into multiple edges
             int new_nodes = points.size()-2;
@@ -600,10 +612,10 @@ class RoadmapManager : public rclcpp::Node
             }
             int prev = v0->color();
             for(int i = 0; i<new_nodes; i++){
-              graph.add_edge(prev,first_new_index+i);
+              graph.add_edge(prev,first_new_index+i, edge_width);
               prev = first_new_index+i;
             }
-            graph.add_edge(prev,v1->color());
+            graph.add_edge(prev,v1->color(), edge_width);
           }
         }
 
@@ -613,11 +625,38 @@ class RoadmapManager : public rclcpp::Node
 
     double find_edge_width(boost::polygon::voronoi_edge<double> edge){
       // small functions to help here
-      auto distance = [](BoostPoint& point, boost::polygon::voronoi_edge<double>& edge){
+      auto dist = [](double ax, double ay, double bx, double by){
+        double dist = std::sqrt(std::pow(ax - bx, 2)+std::pow(ay - by,2));
+        return dist;
+      };
+      auto dist_pe = [dist](BoostPoint& point, boost::polygon::voronoi_edge<double>& edge){
         double mean_x = (edge.vertex0()->x() + edge.vertex1()->x())/2.0;
         double mean_y = (edge.vertex0()->y() + edge.vertex1()->y())/2.0;
-        double dist = std::sqrt(std::pow(mean_x - point.x(),2)+std::pow(mean_y - point.y(),2));
-        return dist;
+        double distance = dist(point.x(), point.y(), mean_x, mean_y);
+        return distance;
+      };
+      auto dist_ee = [dist](boost::polygon::voronoi_edge<double>& a, boost::polygon::voronoi_edge<double>& b){
+        double a_x = (a.vertex0()->x() + a.vertex1()->x())/2.0;
+        double a_y = (a.vertex0()->y() + a.vertex1()->y())/2.0;
+        double b_x = (b.vertex0()->x() + b.vertex1()->x())/2.0;
+        double b_y = (b.vertex0()->y() + b.vertex1()->y())/2.0;
+        double distance = dist(a_x, a_y, b_x, b_y);
+        return distance;
+      };
+      auto min_dist_pe = [dist](BoostPoint& point, boost::polygon::voronoi_edge<double>& edge){
+        double dist_0 = dist(point.x(), edge.vertex0()->x(), point.y(), edge.vertex0()->y());
+        double dist_1 = dist(point.x(), edge.vertex1()->x(), point.y(), edge.vertex1()->y());
+        double minimum = std::min(dist_0, dist_1);
+        return minimum;
+      };
+      auto min_dist_ee = [dist](boost::polygon::voronoi_edge<double>& a, boost::polygon::voronoi_edge<double>& b){
+        double dist_00 = dist(a.vertex0()->x(), a.vertex0()->y(), b.vertex0()->x(), b.vertex0()->y());
+        double dist_01 = dist(a.vertex0()->x(), a.vertex0()->y(), b.vertex1()->x(), b.vertex1()->y());
+        double dist_10 = dist(a.vertex1()->x(), a.vertex1()->y(), b.vertex0()->x(), b.vertex0()->y());
+        double dist_11 = dist(a.vertex1()->x(), a.vertex1()->y(), b.vertex1()->x(), b.vertex1()->y());
+        double minimum = std::min(dist_00, dist_01, dist_10);
+        minimum = std::min(minimum, dist_11);
+        return minimum;
       };
 
       boost::polygon::voronoi_cell<double>* cell = edge.cell();
@@ -625,31 +664,29 @@ class RoadmapManager : public rclcpp::Node
         if(cell->source_category()==boost::polygon::SOURCE_CATEGORY_SINGLE_POINT) {
           std::size_t index = cell->source_index();
           BoostPoint p = points_data[index];
-          double d = distance(p,edge);
+          double d = min_dist_pe(p,edge);
           return d;
 
         }else if(cell->source_category()==boost::polygon::SOURCE_CATEGORY_SEGMENT_START_POINT) {
           std::size_t index = cell->source_index() - points_data.size();
           BoostPoint p0 = low(segments_data[index]);
-          double d = distance(p0, edge);
+          double d = min_dist_pe(p0, edge);
           return d;
 
         }else if(cell->source_category()==boost::polygon::SOURCE_CATEGORY_SEGMENT_END_POINT) {
           std::size_t index = cell->source_index() - points_data.size();
           BoostPoint p1 = high(segments_data[index]);
-          double d = distance(p1, edge);
+          double d = min_dist_pe(p1, edge);
           return d;
         }
       }else{
         std::size_t index = cell->source_index() - points_data.size();
         BoostPoint p0 = low(segments_data[index]);
         BoostPoint p1 = high(segments_data[index]);
-        double mean_p_x = (p0.x() + p1.x())/2.0;
-        double mean_p_y = (p0.y() + p1.y())/2.0;
-        double mean_x = (edge.vertex0()->x() + edge.vertex1()->x())/2.0;
-        double mean_y = (edge.vertex0()->y() + edge.vertex1()->y())/2.0;
-        double dist = std::sqrt(std::pow(mean_x - mean_p_x,2)+std::pow(mean_y - mean_p_y,2));
-        return dist;
+        double dist0 = dist_pe(p0, edge);
+        double dist1 = dist_pe(p1, edge);
+        double min = std::min(dist0, dist1);
+        return min;
       }
     }
     
