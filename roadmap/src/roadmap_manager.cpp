@@ -215,6 +215,7 @@ class RoadmapManager : public rclcpp::Node
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr gates_subscriber;
 
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_publisher;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr widths_publisher;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher;
 
     rclcpp::TimerBase::SharedPtr timer_;
@@ -229,6 +230,8 @@ class RoadmapManager : public rclcpp::Node
     visualization_msgs::msg::MarkerArray markers;
     enum markers_enum {voronoi, waypoints, path_points};
     int MARKERS_NUM = 3;
+
+    visualization_msgs::msg::MarkerArray width_text;
 
     nav_msgs::msg::Path calculated_path; 
 
@@ -264,6 +267,9 @@ class RoadmapManager : public rclcpp::Node
       markers_publisher = this->create_publisher<visualization_msgs::msg::MarkerArray>(
         "markers", qos);
 
+      widths_publisher = this->create_publisher<visualization_msgs::msg::MarkerArray>(
+        "widths", qos);
+
       path_publisher = this->create_publisher<nav_msgs::msg::Path>(
         "path", qos);
 
@@ -292,6 +298,7 @@ class RoadmapManager : public rclcpp::Node
 
     void publish_data(){
       markers_publisher->publish(markers);
+      widths_publisher->publish(width_text);
       path_publisher->publish(calculated_path);
     }
 
@@ -331,6 +338,8 @@ class RoadmapManager : public rclcpp::Node
       path_geo.push_back(p);
 
       add_points_marker(path_geo, markers_enum::path_points, 0.2, 0.5, 0.5, 0.8);
+
+      add_width_markers(search_graph);
 
       r->points = path_geo;
       r->kmax = 6;
@@ -523,6 +532,42 @@ class RoadmapManager : public rclcpp::Node
 
       markers.markers[type] = marker;
       log("Updated waypoints marker at "+std::to_string(type)+".");
+    }
+
+    void add_width_markers(Graph& graph){
+      visualization_msgs::msg::MarkerArray text_array;
+      int id = 0;
+      for(int i=0; i<graph.nodes.size(); i++){
+        for(int j:graph.nodes[i].neighbours){
+          visualization_msgs::msg::Marker marker;
+          marker.header.stamp = this->now();
+          marker.header.frame_id = "map";
+          marker.id = id;
+          id++;
+          marker.action = visualization_msgs::msg::Marker::ADD;
+          marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+          marker.scale.x = 0.2;
+          marker.scale.y = 0.2;
+          marker.scale.z = 0.2;
+          marker.color.a = 1.0;
+          marker.color.r = 1;
+          marker.color.g = 1;
+          marker.color.b = 1;
+          
+          double d = graph.nodes[i].edge_width[j];
+          marker.text = std::to_string(d);
+
+          double x = (graph.nodes[i].x + graph.nodes[j].x)/2.0;
+          double y = (graph.nodes[i].y + graph.nodes[j].y)/2.0;
+          marker.pose.position.x = x;
+          marker.pose.position.y = y;
+          marker.pose.position.z = 0.1;
+          
+          
+          text_array.markers.push_back(marker);
+        }
+      }
+      width_text = text_array;
     }
 
     BoostPoint retrieve_point(const boost::polygon::voronoi_cell<double>& cell) {
