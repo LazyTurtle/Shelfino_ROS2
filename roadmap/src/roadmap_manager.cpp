@@ -4,6 +4,7 @@
 #include <set>
 #include <queue>
 #include <map>
+#include <iomanip>
 #include <algorithm>
 #include "rclcpp/rclcpp.hpp"
 #include "std_srvs/srv/empty.hpp"
@@ -13,7 +14,7 @@
 #include "dubins_planner_msgs/srv/multi_point_dubins_planning.hpp"
 
 #include "roadmap_interfaces/srv/path_service.hpp"
-#include "visualization_msgs/msg/marker.hpp"  
+#include "visualization_msgs/msg/marker_array.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "geometry_msgs/msg/point32.hpp"
 #include "geometry_msgs/msg/polygon.hpp"
@@ -51,6 +52,7 @@ class Node{
 
     double x, y;
     std::set<int> neighbours;
+    std::map<int, double> edge_width;
     Node(){}
     Node(double in_x, double in_y) : x(in_x), y(in_y){}
 
@@ -64,11 +66,6 @@ class Graph{
     std::vector<Node> nodes;
 
     Graph(){}
-    Graph(std::vector<Node> init_nodes, std::vector<std::pair<int, int>> init_edges){
-      nodes = init_nodes;
-      clean_edges();
-      add_edges(init_edges);
-    }
 
     void add_node(double x, double y){
       Node n(x,y);
@@ -78,6 +75,7 @@ class Graph{
     void clean_edges(){
       for(auto& node : nodes){
         node.neighbours.clear();
+        node.edge_width.clear();
       }
     }
 
@@ -90,9 +88,20 @@ class Graph{
       add_edge(edge.first, edge.second);
     }
 
+    void add_edge(std::pair<int, int> edge, double edge_width){
+      add_edge(edge.first, edge.second, edge_width);
+    }
+
     void add_edge(int node_a, int node_b){
       nodes[node_a].neighbours.insert(node_b);
       nodes[node_b].neighbours.insert(node_a);
+    }
+
+    void add_edge(int node_a, int node_b, double edge_width){
+      nodes[node_a].neighbours.insert(node_b);
+      nodes[node_b].neighbours.insert(node_a);
+      nodes[node_a].edge_width[node_b] = edge_width;
+      nodes[node_b].edge_width[node_a] = edge_width;
     }
   
     int find_closest(double x, double y){
@@ -206,8 +215,8 @@ class RoadmapManager : public rclcpp::Node
     rclcpp::Subscription<obstacles_msgs::msg::ObstacleArrayMsg>::SharedPtr obstacles_subscriber;
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr gates_subscriber;
 
-    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr diagram_publisher;
-    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr waypoints_publisher;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_publisher;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr widths_publisher;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher;
 
     rclcpp::TimerBase::SharedPtr timer_;
@@ -219,8 +228,12 @@ class RoadmapManager : public rclcpp::Node
     std::shared_ptr<obstacles_msgs::msg::ObstacleArrayMsg> obstacles_msg;
     std::shared_ptr<geometry_msgs::msg::PoseArray> gates_msg;
 
-    visualization_msgs::msg::Marker vd_marker;
-    visualization_msgs::msg::Marker waypoints_marker;
+    visualization_msgs::msg::MarkerArray markers;
+    enum markers_enum {voronoi, waypoints, path_points};
+    int MARKERS_NUM = 3;
+
+    visualization_msgs::msg::MarkerArray width_text;
+
     nav_msgs::msg::Path calculated_path; 
 
     voronoi_diagram<double> vd;
@@ -252,14 +265,17 @@ class RoadmapManager : public rclcpp::Node
         "test_service", std::bind(&RoadmapManager::test, this, _1, _2));
 
 
-      diagram_publisher = this->create_publisher<visualization_msgs::msg::Marker>(
-        "voronoi_diagram", qos);
-      
-      waypoints_publisher = this->create_publisher<visualization_msgs::msg::Marker>(
-        "waypoints", qos);
+      markers_publisher = this->create_publisher<visualization_msgs::msg::MarkerArray>(
+        "markers", qos);
+
+      widths_publisher = this->create_publisher<visualization_msgs::msg::MarkerArray>(
+        "widths", qos);
 
       path_publisher = this->create_publisher<nav_msgs::msg::Path>(
         "path", qos);
+
+      
+      markers.markers = std::vector<visualization_msgs::msg::Marker>(MARKERS_NUM);
 
       auto interval = 1000ms;
       timer_ = this->create_wall_timer(interval, std::bind(&RoadmapManager::publish_data, this));
@@ -282,8 +298,8 @@ class RoadmapManager : public rclcpp::Node
     }
 
     void publish_data(){
-      diagram_publisher->publish(vd_marker);
-      waypoints_publisher->publish(waypoints_marker);
+      markers_publisher->publish(markers);
+      widths_publisher->publish(width_text);
       path_publisher->publish(calculated_path);
     }
 
@@ -312,7 +328,6 @@ class RoadmapManager : public rclcpp::Node
       p.x = -1;
       p.y = -4;
       path_geo.push_back(p);
-      waypoints_marker.points.push_back(p);
       for(int i:path_int){
         geometry_msgs::msg::Point p;
         p.x = search_graph.nodes[i].x;
@@ -322,7 +337,10 @@ class RoadmapManager : public rclcpp::Node
       p.x = 4;
       p.y = 2;
       path_geo.push_back(p);
-      waypoints_marker.points.push_back(p);
+
+      add_points_marker(path_geo, markers_enum::path_points, 0.2, 0.5, 0.5, 0.8);
+
+      add_width_markers(search_graph);
 
       r->points = path_geo;
       r->kmax = 6;
@@ -443,15 +461,6 @@ class RoadmapManager : public rclcpp::Node
       }
       path_coordinates.push_back(std::make_pair(x_end, y_end));
 
-      calculated_path = refine_path(path_coordinates);
-
-
-    }
-
-    nav_msgs::msg::Path refine_path(const std::vector<std::pair<double,double>>& coordinates){
-      nav_msgs::msg::Path refined_path;
-      
-      return refined_path;
     }
 
     void update_diagram_marker(){
@@ -460,7 +469,7 @@ class RoadmapManager : public rclcpp::Node
 
       marker.header.stamp = this->now();
       marker.header.frame_id = "map";
-      marker.id = 0;
+      marker.id = markers_enum::voronoi;
       marker.action = visualization_msgs::msg::Marker::ADD;
       marker.type = visualization_msgs::msg::Marker::LINE_LIST;
       marker.scale.x = 0.05;
@@ -487,31 +496,72 @@ class RoadmapManager : public rclcpp::Node
 
       }
 
-      vd_marker = marker;
+      markers.markers[markers_enum::voronoi] = marker;
       log("Updated voronoi graph marker.");
-      update_waypoints_marker(nodes_coordinates);
+      add_points_marker(nodes_coordinates, markers_enum::waypoints);
     }
 
-    void update_waypoints_marker(const std::vector<geometry_msgs::msg::Point>& point_list){
+    void add_points_marker(
+      const std::vector<geometry_msgs::msg::Point>& point_list,
+      markers_enum type = markers_enum::waypoints, double l = 0.1,
+      double r=0.5, double g=0.5, double b=0.5){
       visualization_msgs::msg::Marker marker;
 
       marker.header.stamp = this->now();
       marker.header.frame_id = "map";
-      marker.id = 1;
+      marker.id = type;
       marker.action = visualization_msgs::msg::Marker::ADD;
-      marker.type = visualization_msgs::msg::Marker::CUBE_LIST;
-      marker.scale.x = 0.1;
-      marker.scale.y = 0.1;
+      marker.type = visualization_msgs::msg::Marker::POINTS;
+      marker.scale.x = l;
+      marker.scale.y = l;
       marker.scale.z = 0.1;
       marker.color.a = 1.0;
-      marker.color.r = 1.0;
-      marker.color.g = 0.5;
-      marker.color.b = 0.5;
+      marker.color.r = r;
+      marker.color.g = g;
+      marker.color.b = b;
 
       marker.points = point_list;
 
-      waypoints_marker = marker;
-      log("Updated waypoints marker.");
+      markers.markers[type] = marker;
+      log("Updated waypoints marker at "+std::to_string(type)+".");
+    }
+
+    void add_width_markers(Graph& graph){
+      visualization_msgs::msg::MarkerArray text_array;
+      int id = 0;
+      for(int i=0; i<graph.nodes.size(); i++){
+        for(int j:graph.nodes[i].neighbours){
+          visualization_msgs::msg::Marker marker;
+          marker.header.stamp = this->now();
+          marker.header.frame_id = "map";
+          marker.id = id;
+          id++;
+          marker.action = visualization_msgs::msg::Marker::ADD;
+          marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+          marker.scale.x = 0.2;
+          marker.scale.y = 0.2;
+          marker.scale.z = 0.2;
+          marker.color.a = 1.0;
+          marker.color.r = 1;
+          marker.color.g = 1;
+          marker.color.b = 1;
+          
+          double d = graph.nodes[i].edge_width[j];
+          std::ostringstream ss;
+          ss << std::fixed << std::setprecision(3) << d;
+          marker.text = ss.str();
+
+          double x = (graph.nodes[i].x + graph.nodes[j].x)/2.0;
+          double y = (graph.nodes[i].y + graph.nodes[j].y)/2.0;
+          marker.pose.position.x = x;
+          marker.pose.position.y = y;
+          marker.pose.position.z = 0.1;
+          
+          
+          text_array.markers.push_back(marker);
+        }
+      }
+      width_text = text_array;
     }
 
     BoostPoint retrieve_point(const boost::polygon::voronoi_cell<double>& cell) {
@@ -546,18 +596,22 @@ class RoadmapManager : public rclcpp::Node
     Graph build_search_graph(){
       Graph graph;
       for(auto itr = vd.vertices().begin(); itr != vd.vertices().end(); ++itr){
-        graph.add_node(itr->x()/scale, itr->y()/scale);
+        double v_x = itr->x()/scale;
+        double v_y = itr->y()/scale;
+        graph.add_node(v_x, v_y);
       }
       for(auto itr = vd.edges().begin(); itr != vd.edges().end(); ++itr){
         if(itr->is_infinite() || itr->is_secondary())
           // I am not interested in infinite or secondary edges, we don't use
           // them for navigation 
           continue;
-        
+
         auto v0 = itr->vertex0();
         auto v1 = itr->vertex1();
         if(itr->is_linear()){
-          graph.add_edge(v0->color(), v1->color());   
+          
+          double edge_width = find_edge_width(*itr, scale);
+          graph.add_edge(v0->color(), v1->color(), edge_width);
 
         }else{
           // is curved
@@ -583,9 +637,14 @@ class RoadmapManager : public rclcpp::Node
           boost::polygon::voronoi_visual_utils<double>::discretize(
           point, segment, discretization, &points);
 
+          // TODO: I have no idea how to handle very long curves
+          // I only have data about the end points and all I can do are averages
+          // or being conservative and always choose the smallest one
+          double edge_width = find_edge_width(*itr, scale);
+
           if(points.size()==2){
             // the edge is curved, but small enough we do not need to divide it
-            graph.add_edge(v0->color(), v1->color());
+            graph.add_edge(v0->color(), v1->color(), edge_width);
           }else{
             // the edge has been divided into multiple edges
             int new_nodes = points.size()-2;
@@ -595,15 +654,93 @@ class RoadmapManager : public rclcpp::Node
             }
             int prev = v0->color();
             for(int i = 0; i<new_nodes; i++){
-              graph.add_edge(prev,first_new_index+i);
+              graph.add_edge(prev,first_new_index+i, edge_width);
               prev = first_new_index+i;
             }
-            graph.add_edge(prev,v1->color());
+            graph.add_edge(prev,v1->color(), edge_width);
           }
         }
-
       }
+
       return graph;
+    }
+
+    double find_edge_width(boost::polygon::voronoi_edge<double> edge, double scale){
+      // small functions to help here
+      auto dist = [](double ax, double ay, double bx, double by){
+        double dist = std::sqrt(std::pow(ax - bx, 2)+std::pow(ay - by,2));
+        return dist;
+      };
+      auto dist_pe = [dist, scale](BoostPoint& point, boost::polygon::voronoi_edge<double>& edge){
+        double mean_x = (edge.vertex0()->x() + edge.vertex1()->x())/2.0;
+        double mean_y = (edge.vertex0()->y() + edge.vertex1()->y())/2.0;
+        double distance = dist(point.x(), point.y(), mean_x, mean_y)/scale;
+        return distance;
+      };
+      auto dist_ee = [dist, scale](boost::polygon::voronoi_edge<double>& a, boost::polygon::voronoi_edge<double>& b){
+        double a_x = (a.vertex0()->x() + a.vertex1()->x())/2.0/scale;
+        double a_y = (a.vertex0()->y() + a.vertex1()->y())/2.0/scale;
+        double b_x = (b.vertex0()->x() + b.vertex1()->x())/2.0/scale;
+        double b_y = (b.vertex0()->y() + b.vertex1()->y())/2.0/scale;
+        double distance = dist(a_x, a_y, b_x, b_y);
+        return distance;
+      };
+      auto min_dist_pe = [dist, scale](BoostPoint& point, boost::polygon::voronoi_edge<double>& edge){
+        double dist_0 = dist(point.x(), point.y(), edge.vertex0()->x(), edge.vertex0()->y())/scale;
+        double dist_1 = dist(point.x(), point.y(), edge.vertex1()->x(), edge.vertex1()->y())/scale;
+        double minimum = std::min(dist_0, dist_1);
+        return minimum;
+      };
+      auto min_dist_ee = [dist, scale](boost::polygon::voronoi_edge<double>& a, boost::polygon::voronoi_edge<double>& b){
+        double dist_00 = dist(a.vertex0()->x(), a.vertex0()->y(), b.vertex0()->x(), b.vertex0()->y())/scale;
+        double dist_01 = dist(a.vertex0()->x(), a.vertex0()->y(), b.vertex1()->x(), b.vertex1()->y())/scale;
+        double dist_10 = dist(a.vertex1()->x(), a.vertex1()->y(), b.vertex0()->x(), b.vertex0()->y())/scale;
+        double dist_11 = dist(a.vertex1()->x(), a.vertex1()->y(), b.vertex1()->x(), b.vertex1()->y())/scale;
+        auto min_v = {dist_00, dist_01, dist_10, dist_11};
+        auto minimum = std::min_element(min_v.begin(), min_v.end());
+        return minimum;
+      };
+
+      auto min_distance_from_cells = [this, dist, dist_pe, dist_ee, min_dist_pe, min_dist_ee]
+      (boost::polygon::voronoi_cell<double>* cell, boost::polygon::voronoi_edge<double>& edge){
+        if (cell->contains_point()) {
+          if(cell->source_category()==boost::polygon::SOURCE_CATEGORY_SINGLE_POINT) {
+            std::size_t index = cell->source_index();
+            BoostPoint p = points_data[index];
+            double d = min_dist_pe(p,edge);
+            return d;
+
+          }else if(cell->source_category()==boost::polygon::SOURCE_CATEGORY_SEGMENT_START_POINT) {
+            std::size_t index = cell->source_index() - points_data.size();
+            BoostPoint p0 = low(segments_data[index]);
+            double d = min_dist_pe(p0, edge);
+            return d;
+
+          }else if(cell->source_category()==boost::polygon::SOURCE_CATEGORY_SEGMENT_END_POINT) {
+            std::size_t index = cell->source_index() - points_data.size();
+            BoostPoint p1 = high(segments_data[index]);
+            double d = min_dist_pe(p1, edge);
+            return d;
+          }
+        }else{
+          std::size_t index = cell->source_index() - points_data.size();
+          BoostPoint p0 = low(segments_data[index]);
+          BoostPoint p1 = high(segments_data[index]);
+          double dist0 = min_dist_pe(p0, edge);
+          double dist1 = min_dist_pe(p1, edge);
+          double min = std::min(dist0, dist1);
+          return min;
+        }
+      };
+      
+      boost::polygon::voronoi_cell<double>* cell_a = edge.cell();
+      boost::polygon::voronoi_cell<double>* cell_b = edge.twin()->cell();
+
+      double dist_a = min_distance_from_cells(cell_a, edge);
+      double dist_b = min_distance_from_cells(cell_b, edge);
+      double min_dist = std::min(dist_a, dist_b);
+      return min_dist;
+      
     }
     
 };
