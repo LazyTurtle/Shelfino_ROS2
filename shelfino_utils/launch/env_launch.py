@@ -19,6 +19,11 @@ def generate_launch_description():
             name='gates_node'
         ),
         Node(
+            package='dubins_calculator',
+            executable='dubins_calculator',
+            output='screen',
+        ),
+        Node(
             package='rviz2',
             executable='rviz2',
             parameters=[{'use_sim_time': True}],
