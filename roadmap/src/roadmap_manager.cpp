@@ -13,7 +13,7 @@
 #include "dubins_planner_msgs/srv/multi_point_dubins_planning.hpp"
 
 #include "roadmap_interfaces/srv/path_service.hpp"
-#include "visualization_msgs/msg/marker.hpp"  
+#include "visualization_msgs/msg/marker_array.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "geometry_msgs/msg/point32.hpp"
 #include "geometry_msgs/msg/polygon.hpp"
@@ -214,8 +214,7 @@ class RoadmapManager : public rclcpp::Node
     rclcpp::Subscription<obstacles_msgs::msg::ObstacleArrayMsg>::SharedPtr obstacles_subscriber;
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr gates_subscriber;
 
-    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr diagram_publisher;
-    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr waypoints_publisher;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_publisher;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher;
 
     rclcpp::TimerBase::SharedPtr timer_;
@@ -227,8 +226,10 @@ class RoadmapManager : public rclcpp::Node
     std::shared_ptr<obstacles_msgs::msg::ObstacleArrayMsg> obstacles_msg;
     std::shared_ptr<geometry_msgs::msg::PoseArray> gates_msg;
 
-    visualization_msgs::msg::Marker vd_marker;
-    visualization_msgs::msg::Marker waypoints_marker;
+    visualization_msgs::msg::MarkerArray markers;
+    enum markers_enum {voronoi, waypoints, path_points};
+    int MARKERS_NUM = 3;
+
     nav_msgs::msg::Path calculated_path; 
 
     voronoi_diagram<double> vd;
@@ -260,14 +261,14 @@ class RoadmapManager : public rclcpp::Node
         "test_service", std::bind(&RoadmapManager::test, this, _1, _2));
 
 
-      diagram_publisher = this->create_publisher<visualization_msgs::msg::Marker>(
-        "voronoi_diagram", qos);
-      
-      waypoints_publisher = this->create_publisher<visualization_msgs::msg::Marker>(
-        "waypoints", qos);
+      markers_publisher = this->create_publisher<visualization_msgs::msg::MarkerArray>(
+        "markers", qos);
 
       path_publisher = this->create_publisher<nav_msgs::msg::Path>(
         "path", qos);
+
+      
+      markers.markers = std::vector<visualization_msgs::msg::Marker>(MARKERS_NUM);
 
       auto interval = 1000ms;
       timer_ = this->create_wall_timer(interval, std::bind(&RoadmapManager::publish_data, this));
@@ -290,8 +291,7 @@ class RoadmapManager : public rclcpp::Node
     }
 
     void publish_data(){
-      diagram_publisher->publish(vd_marker);
-      waypoints_publisher->publish(waypoints_marker);
+      markers_publisher->publish(markers);
       path_publisher->publish(calculated_path);
     }
 
@@ -320,7 +320,6 @@ class RoadmapManager : public rclcpp::Node
       p.x = -1;
       p.y = -4;
       path_geo.push_back(p);
-      waypoints_marker.points.push_back(p);
       for(int i:path_int){
         geometry_msgs::msg::Point p;
         p.x = search_graph.nodes[i].x;
@@ -330,7 +329,8 @@ class RoadmapManager : public rclcpp::Node
       p.x = 4;
       p.y = 2;
       path_geo.push_back(p);
-      waypoints_marker.points.push_back(p);
+
+      add_points_marker(path_geo, markers_enum::path_points, 0.2, 0.5, 0.5, 0.8);
 
       r->points = path_geo;
       r->kmax = 6;
@@ -468,7 +468,7 @@ class RoadmapManager : public rclcpp::Node
 
       marker.header.stamp = this->now();
       marker.header.frame_id = "map";
-      marker.id = 0;
+      marker.id = markers_enum::voronoi;
       marker.action = visualization_msgs::msg::Marker::ADD;
       marker.type = visualization_msgs::msg::Marker::LINE_LIST;
       marker.scale.x = 0.05;
@@ -495,31 +495,34 @@ class RoadmapManager : public rclcpp::Node
 
       }
 
-      vd_marker = marker;
+      markers.markers[markers_enum::voronoi] = marker;
       log("Updated voronoi graph marker.");
-      update_waypoints_marker(nodes_coordinates);
+      add_points_marker(nodes_coordinates, markers_enum::waypoints);
     }
 
-    void update_waypoints_marker(const std::vector<geometry_msgs::msg::Point>& point_list){
+    void add_points_marker(
+      const std::vector<geometry_msgs::msg::Point>& point_list,
+      markers_enum type = markers_enum::waypoints, double l = 0.1,
+      double r=0.5, double g=0.5, double b=0.5){
       visualization_msgs::msg::Marker marker;
 
       marker.header.stamp = this->now();
       marker.header.frame_id = "map";
-      marker.id = 1;
+      marker.id = type;
       marker.action = visualization_msgs::msg::Marker::ADD;
-      marker.type = visualization_msgs::msg::Marker::CUBE_LIST;
-      marker.scale.x = 0.1;
-      marker.scale.y = 0.1;
+      marker.type = visualization_msgs::msg::Marker::POINTS;
+      marker.scale.x = l;
+      marker.scale.y = l;
       marker.scale.z = 0.1;
       marker.color.a = 1.0;
-      marker.color.r = 1.0;
-      marker.color.g = 0.5;
-      marker.color.b = 0.5;
+      marker.color.r = r;
+      marker.color.g = g;
+      marker.color.b = b;
 
       marker.points = point_list;
 
-      waypoints_marker = marker;
-      log("Updated waypoints marker.");
+      markers.markers[type] = marker;
+      log("Updated waypoints marker at "+std::to_string(type)+".");
     }
 
     BoostPoint retrieve_point(const boost::polygon::voronoi_cell<double>& cell) {
