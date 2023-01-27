@@ -104,10 +104,13 @@ class Graph{
       nodes[node_b].edge_width[node_a] = edge_width;
     }
   
-    int find_closest(double x, double y){
+    int find_closest(double x, double y, double minimum_width = 0.0){
+
       int closest = -1;
       double min_dist = std::numeric_limits<double>().infinity();
       for(int i=0; i<nodes.size(); i++){
+        if(!has_edges_wide_enough(i, minimum_width))
+          continue;
         double dist = Node::distance(x,y,nodes[i].x,nodes[i].y);
         if(dist<min_dist){
           min_dist = dist;
@@ -117,7 +120,7 @@ class Graph{
       return closest;
     }
 
-    std::vector<int> find_path(int start, int end, double tollerance = 0.0){
+    std::vector<int> find_path(int start, int end, double tollerance = 0.0, double minimum_width = 0.0){
       class Estimate{
         bool reverse;
         public:
@@ -165,6 +168,10 @@ class Graph{
         open_set.pop();
         in_open_set.erase(current);
         for(int neighbour:nodes[current].neighbours){
+          // let's consider only neighbours which are reachable through a wide enough edge
+          if(nodes[current].edge_width[neighbour]<minimum_width)
+            continue;
+          
           double temp_g_score = e.g_score[current] + Node::distance(nodes[current], nodes[neighbour]);
 
           if(temp_g_score<e.g_score[neighbour]){
@@ -199,6 +206,15 @@ class Graph{
       }
       return path;
     }
+
+    bool has_edges_wide_enough(int node_index, double minimum_width){
+      bool retult = false;
+      for(auto map_item:nodes[node_index].edge_width){
+        if(map_item.second>=minimum_width)
+          retult = true;
+      }
+      return retult;
+   }
 };
 
 class RoadmapManager : public rclcpp::Node
@@ -310,12 +326,19 @@ class RoadmapManager : public rclcpp::Node
       log("Start testing.");
       update_voronoi_diagram();
 
+      double start_x = -1.0;
+      double start_y = -4.0;
+      double end_x = -1.0;
+      double end_y = 3.6;
 
-      int closest_node_to_start = search_graph.find_closest(-1, -4);
-      int closest_node_to_end = search_graph.find_closest(4, 2);
+      double minimum_width = 0.69;
+
+
+      int closest_node_to_start = search_graph.find_closest(start_x, start_y, minimum_width);
+      int closest_node_to_end = search_graph.find_closest(end_x, end_y, minimum_width);
       double tollerance = 0.3;
       
-      std::vector<int> path_int = search_graph.find_path(closest_node_to_start, closest_node_to_end, tollerance);
+      std::vector<int> path_int = search_graph.find_path(closest_node_to_start, closest_node_to_end, tollerance, minimum_width);
 
       std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("multi_points_dubins_calculator_client");
       rclcpp::Client<dubins_planner_msgs::srv::MultiPointDubinsPlanning>::SharedPtr client =
@@ -325,8 +348,8 @@ class RoadmapManager : public rclcpp::Node
 
       std::vector<geometry_msgs::msg::Point> path_geo;
       geometry_msgs::msg::Point p;
-      p.x = -1;
-      p.y = -4;
+      p.x = start_x;
+      p.y = start_y;
       path_geo.push_back(p);
       for(int i:path_int){
         geometry_msgs::msg::Point p;
@@ -334,8 +357,8 @@ class RoadmapManager : public rclcpp::Node
         p.y = search_graph.nodes[i].y;
         path_geo.push_back(p);
       }
-      p.x = 4;
-      p.y = 2;
+      p.x = end_x;
+      p.y = end_y;
       path_geo.push_back(p);
 
       add_points_marker(path_geo, markers_enum::path_points, 0.2, 0.5, 0.5, 0.8);
