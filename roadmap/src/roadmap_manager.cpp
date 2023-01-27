@@ -89,7 +89,7 @@ class Graph{
     }
 
     void add_edge(std::pair<int, int> edge, double edge_width){
-      add_edge(edge.first, edge.second);
+      add_edge(edge.first, edge.second, edge_width);
     }
 
     void add_edge(int node_a, int node_b){
@@ -461,15 +461,6 @@ class RoadmapManager : public rclcpp::Node
       }
       path_coordinates.push_back(std::make_pair(x_end, y_end));
 
-      calculated_path = refine_path(path_coordinates);
-
-
-    }
-
-    nav_msgs::msg::Path refine_path(const std::vector<std::pair<double,double>>& coordinates){
-      nav_msgs::msg::Path refined_path;
-      
-      return refined_path;
     }
 
     void update_diagram_marker(){
@@ -669,7 +660,6 @@ class RoadmapManager : public rclcpp::Node
             graph.add_edge(prev,v1->color(), edge_width);
           }
         }
-
       }
 
       return graph;
