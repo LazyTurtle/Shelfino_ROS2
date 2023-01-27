@@ -4,6 +4,7 @@
 #include <set>
 #include <queue>
 #include <map>
+#include <iomanip>
 #include <algorithm>
 #include "rclcpp/rclcpp.hpp"
 #include "std_srvs/srv/empty.hpp"
@@ -555,7 +556,9 @@ class RoadmapManager : public rclcpp::Node
           marker.color.b = 1;
           
           double d = graph.nodes[i].edge_width[j];
-          marker.text = std::to_string(d);
+          std::ostringstream ss;
+          ss << std::fixed << std::setprecision(3) << d;
+          marker.text = ss.str();
 
           double x = (graph.nodes[i].x + graph.nodes[j].x)/2.0;
           double y = (graph.nodes[i].y + graph.nodes[j].y)/2.0;
