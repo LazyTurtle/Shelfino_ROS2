@@ -671,6 +671,7 @@ class RoadmapManager : public rclcpp::Node
         }
 
       }
+
       return graph;
     }
 
@@ -710,35 +711,46 @@ class RoadmapManager : public rclcpp::Node
         return minimum;
       };
 
-      boost::polygon::voronoi_cell<double>* cell = edge.cell();
-      if (cell->contains_point()) {
-        if(cell->source_category()==boost::polygon::SOURCE_CATEGORY_SINGLE_POINT) {
-          std::size_t index = cell->source_index();
-          BoostPoint p = points_data[index];
-          double d = min_dist_pe(p,edge);
-          return d;
+      auto min_distance_from_cells = [this, dist, dist_pe, dist_ee, min_dist_pe, min_dist_ee]
+      (boost::polygon::voronoi_cell<double>* cell, boost::polygon::voronoi_edge<double>& edge){
+        if (cell->contains_point()) {
+          if(cell->source_category()==boost::polygon::SOURCE_CATEGORY_SINGLE_POINT) {
+            std::size_t index = cell->source_index();
+            BoostPoint p = points_data[index];
+            double d = min_dist_pe(p,edge);
+            return d;
 
-        }else if(cell->source_category()==boost::polygon::SOURCE_CATEGORY_SEGMENT_START_POINT) {
+          }else if(cell->source_category()==boost::polygon::SOURCE_CATEGORY_SEGMENT_START_POINT) {
+            std::size_t index = cell->source_index() - points_data.size();
+            BoostPoint p0 = low(segments_data[index]);
+            double d = min_dist_pe(p0, edge);
+            return d;
+
+          }else if(cell->source_category()==boost::polygon::SOURCE_CATEGORY_SEGMENT_END_POINT) {
+            std::size_t index = cell->source_index() - points_data.size();
+            BoostPoint p1 = high(segments_data[index]);
+            double d = min_dist_pe(p1, edge);
+            return d;
+          }
+        }else{
           std::size_t index = cell->source_index() - points_data.size();
           BoostPoint p0 = low(segments_data[index]);
-          double d = min_dist_pe(p0, edge);
-          return d;
-
-        }else if(cell->source_category()==boost::polygon::SOURCE_CATEGORY_SEGMENT_END_POINT) {
-          std::size_t index = cell->source_index() - points_data.size();
           BoostPoint p1 = high(segments_data[index]);
-          double d = min_dist_pe(p1, edge);
-          return d;
+          double dist0 = min_dist_pe(p0, edge);
+          double dist1 = min_dist_pe(p1, edge);
+          double min = std::min(dist0, dist1);
+          return min;
         }
-      }else{
-        std::size_t index = cell->source_index() - points_data.size();
-        BoostPoint p0 = low(segments_data[index]);
-        BoostPoint p1 = high(segments_data[index]);
-        double dist0 = dist_pe(p0, edge);
-        double dist1 = dist_pe(p1, edge);
-        double min = std::min(dist0, dist1);
-        return min;
-      }
+      };
+      
+      boost::polygon::voronoi_cell<double>* cell_a = edge.cell();
+      boost::polygon::voronoi_cell<double>* cell_b = edge.twin()->cell();
+
+      double dist_a = min_distance_from_cells(cell_a, edge);
+      double dist_b = min_distance_from_cells(cell_b, edge);
+      double min_dist = std::min(dist_a, dist_b);
+      return min_dist;
+      
     }
     
 };
