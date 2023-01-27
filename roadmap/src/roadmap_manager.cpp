@@ -695,8 +695,8 @@ class RoadmapManager : public rclcpp::Node
         return distance;
       };
       auto min_dist_pe = [dist, scale](BoostPoint& point, boost::polygon::voronoi_edge<double>& edge){
-        double dist_0 = dist(point.x(), edge.vertex0()->x(), point.y(), edge.vertex0()->y())/scale;
-        double dist_1 = dist(point.x(), edge.vertex1()->x(), point.y(), edge.vertex1()->y())/scale;
+        double dist_0 = dist(point.x(), point.y(), edge.vertex0()->x(), edge.vertex0()->y())/scale;
+        double dist_1 = dist(point.x(), point.y(), edge.vertex1()->x(), edge.vertex1()->y())/scale;
         double minimum = std::min(dist_0, dist_1);
         return minimum;
       };
