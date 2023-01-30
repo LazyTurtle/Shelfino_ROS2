@@ -148,7 +148,7 @@ class Graph{
 
       std::map<int,int> came_from;
       std::vector<int> open_set;
-      std::set<int> in_open_set;
+      std::set<int> in_open_set; // I could use find, but this is clearer
       open_set.push_back(start);
       in_open_set.insert(start);
 
@@ -333,6 +333,14 @@ class RoadmapManager : public rclcpp::Node
       
       std::vector<int> path_int = search_graph.find_path(closest_node_to_start, closest_node_to_end, tollerance, minimum_width);
 
+      if(path_int.size()==0){
+        std::ostringstream s;
+        s<<"No path found from ["<<start_x<<","<<start_y<<"] to ["<<end_x<<","<<end_y<<"].";
+        log(s.str());
+        // TODO: add negative response data
+        return;
+      }
+
       std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("multi_points_dubins_calculator_client");
       rclcpp::Client<dubins_planner_msgs::srv::MultiPointDubinsPlanning>::SharedPtr client =
         client_node->create_client<dubins_planner_msgs::srv::MultiPointDubinsPlanning>("multi_points_dubins_calculator");
@@ -356,7 +364,6 @@ class RoadmapManager : public rclcpp::Node
 
       add_points_marker(path_geo, markers_enum::path_points, 0.2, 0.5, 0.5, 0.8);
 
-      add_width_markers(search_graph);
 
       r->points = path_geo;
       r->kmax = 6;
@@ -414,6 +421,8 @@ class RoadmapManager : public rclcpp::Node
       add_ids_to_vertices();
       search_graph = build_search_graph();
       update_diagram_marker();
+      add_width_markers(search_graph);
+
     }
 
     void add_polygon_to_boost_segments(
@@ -502,7 +511,6 @@ class RoadmapManager : public rclcpp::Node
         ma.y = node.y;
         nodes_coordinates.push_back(ma);
         for(auto neighbour:node.neighbours){
-          // TODO: use BFS in order to only produce a single segment for edge
           geometry_msgs::msg::Point mb;
           mb.x = search_graph.nodes[neighbour].x;
           mb.y = search_graph.nodes[neighbour].y;
@@ -747,6 +755,7 @@ class RoadmapManager : public rclcpp::Node
           double min = std::min(dist0, dist1);
           return min;
         }
+        return -1.0;
       };
       
       boost::polygon::voronoi_cell<double>* cell_a = edge.cell();
