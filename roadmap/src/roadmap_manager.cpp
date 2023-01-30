@@ -243,8 +243,7 @@ class RoadmapManager : public rclcpp::Node
 
     visualization_msgs::msg::MarkerArray width_text;
 
-    nav_msgs::msg::Path calculated_path; 
-
+    nav_msgs::msg::Path calculated_path;
     voronoi_diagram<double> vd;
     Graph search_graph;
     std::vector<BoostSegment> segments_data;
@@ -266,13 +265,11 @@ class RoadmapManager : public rclcpp::Node
       gates_subscriber = this->create_subscription<geometry_msgs::msg::PoseArray>(
         "gate_position", qos, std::bind(&RoadmapManager::set_gates, this, _1));
 
-
       path_service = this->create_service<roadmap_interfaces::srv::PathService>(
         "compute_path", std::bind(&RoadmapManager::compute_path, this, _1, _2));
 
       test_service = this->create_service<std_srvs::srv::Empty>(
         "test_service", std::bind(&RoadmapManager::test, this, _1, _2));
-
 
       markers_publisher = this->create_publisher<visualization_msgs::msg::MarkerArray>(
         "markers", qos);
@@ -282,7 +279,6 @@ class RoadmapManager : public rclcpp::Node
 
       path_publisher = this->create_publisher<nav_msgs::msg::Path>(
         "path", qos);
-
       
       markers.markers = std::vector<visualization_msgs::msg::Marker>(MARKERS_NUM);
 
@@ -399,7 +395,7 @@ class RoadmapManager : public rclcpp::Node
         log("Pointers not ready.");
         return;
       }
-      log("Start updating the voronoi diagram");
+      log("Start updating the voronoi diagram.");
 
       segments_data.clear();
       points_data.clear();
