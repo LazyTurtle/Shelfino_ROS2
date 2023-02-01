@@ -463,24 +463,83 @@ class RoadmapManager : public rclcpp::Node
     void compute_path(
       const std::shared_ptr<roadmap_interfaces::srv::PathService_Request> request,
       std::shared_ptr<roadmap_interfaces::srv::PathService_Response> response){
+
+      log("Start computation.");
+      update_voronoi_diagram();
       response->result = false;
-      double x_start = request->start.x;
-      double y_start = request->start.y;
-      double x_end = request->end.x;
-      double y_end = request->end.y;
+      double start_x = request->start.x;
+      double start_y = request->start.y;
+      double end_x = request->end.x;
+      double end_y = request->end.y;
 
-      int closest_node_to_start = search_graph.find_closest(-1, -4);
-      int closest_node_to_end = search_graph.find_closest(4, 2);
-      std::vector<int> path = search_graph.find_path(closest_node_to_start, closest_node_to_end);
+      double minimum_width = request->minimum_path_width;
 
-      std::vector<std::pair<double,double>> path_coordinates;
-      path_coordinates.push_back(std::make_pair(x_start, y_start));
-      for(int i : path){
-        double x = search_graph.nodes[i].x;
-        double y = search_graph.nodes[i].y;
-        path_coordinates.push_back(std::make_pair(x, y));
+
+      int closest_node_to_start = search_graph.find_closest(start_x, start_y, minimum_width);
+      int closest_node_to_end = search_graph.find_closest(end_x, end_y, minimum_width);
+      double tollerance = 0.3;
+      
+      std::vector<int> path_int = search_graph.find_path(closest_node_to_start, closest_node_to_end, tollerance, minimum_width);
+
+      if(path_int.size()==0){
+        std::ostringstream s;
+        s<<"No path found from ["<<start_x<<","<<start_y<<"] to ["<<end_x<<","<<end_y<<"].";
+        log(s.str());
+        return;
       }
-      path_coordinates.push_back(std::make_pair(x_end, y_end));
+
+      std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("multi_points_dubins_calculator_client");
+      rclcpp::Client<dubins_planner_msgs::srv::MultiPointDubinsPlanning>::SharedPtr client =
+        client_node->create_client<dubins_planner_msgs::srv::MultiPointDubinsPlanning>("multi_points_dubins_calculator");
+      
+      auto r = std::make_shared<dubins_planner_msgs::srv::MultiPointDubinsPlanning::Request>();
+
+      std::vector<geometry_msgs::msg::Point> path_geo;
+      geometry_msgs::msg::Point p;
+      p.x = start_x;
+      p.y = start_y;
+      path_geo.push_back(p);
+      for(int i:path_int){
+        geometry_msgs::msg::Point p;
+        p.x = search_graph.nodes[i].x;
+        p.y = search_graph.nodes[i].y;
+        path_geo.push_back(p);
+      }
+      p.x = end_x;
+      p.y = end_y;
+      path_geo.push_back(p);
+
+      add_points_marker(path_geo, markers_enum::path_points, 0.2, 0.5, 0.5, 0.8);
+
+
+      r->points = path_geo;
+      r->kmax = 5;
+      r->komega = 4;
+      r->refinements = 3;
+
+      while (!client->wait_for_service(3s)) {
+        if (!rclcpp::ok()) {
+        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Interrupted while waiting for the multi_points_dubins_calculator service. Exiting.");
+        return;
+        }
+        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "service not available, waiting again...");
+      }
+
+      auto result = client->async_send_request(r);
+      // Wait for the result.
+      if (rclcpp::spin_until_future_complete(client_node, result) == rclcpp::FutureReturnCode::SUCCESS){
+        log("Path obtained.");
+        auto temp_path = result.get()->path;
+        temp_path.header.frame_id = "map";
+        temp_path.header.stamp = this->now();
+        
+        calculated_path = temp_path;
+
+        response->result = true;
+        response->path = temp_path;
+      } else {
+        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed to call service dubins calculator");
+      }
 
     }
 
