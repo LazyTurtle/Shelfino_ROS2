@@ -22,7 +22,8 @@ find_package(send_gates REQUIRED)
 find_package(send_obstacles REQUIRED)
 
 install(DIRECTORY 
-        launch
+  launch
+  config
   DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
