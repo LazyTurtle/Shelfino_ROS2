@@ -125,8 +125,9 @@ class Graph{
       auto find_minimum = [](const std::vector<int>& elements, const std::vector<double>& values){
         int min;
         double min_val = std::numeric_limits<double>().infinity();
-        for(int i = 0; i<elements.size(); i++){
-          if(values[i]<min_val){
+        for(auto i:elements){
+          double temp = values[i];
+          if(temp<min_val){
             min_val = values[i];
             min = i;
           }
@@ -373,7 +374,6 @@ class RoadmapManager : public rclcpp::Node
         }
         RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "service not available, waiting again...");
       }
-
       auto result = client->async_send_request(r);
       // Wait for the result.
       if (rclcpp::spin_until_future_complete(client_node, result) == rclcpp::FutureReturnCode::SUCCESS){
@@ -386,7 +386,6 @@ class RoadmapManager : public rclcpp::Node
       } else {
         RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed to call service dubins calculator");
       }
-
     }
 
     void update_voronoi_diagram(){
@@ -641,6 +640,7 @@ class RoadmapManager : public rclcpp::Node
         }
       }
       width_text = text_array;
+      log("Updated width markers");
     }
 
     BoostPoint retrieve_point(const boost::polygon::voronoi_cell<double>& cell) {
