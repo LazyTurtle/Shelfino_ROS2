@@ -20,6 +20,7 @@ find_package(ament_cmake REQUIRED)
 find_package(send_borders REQUIRED)
 find_package(send_gates REQUIRED)
 find_package(send_obstacles REQUIRED)
+find_package(gazebo_ros_pkgs REQUIRED)
 
 install(DIRECTORY 
   launch

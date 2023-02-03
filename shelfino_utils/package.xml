@@ -16,6 +16,16 @@
   <depend>send_gates</depend>
   <depend>send_borders</depend>
   <depend>launch_ros</depend>
+  <depend>xacro</depend>
+  <depend>gazebo_ros_pkgs</depend>
+  <depend>gazebo_ros2_control</depend>
+  <depend>nav2_bringup</depend>
+  <depend>cartographer</depend>
+  <depend>cartographer_ros</depend>
+  <depend>test_msgs</depend>
+  <depend>ros_gz</depend>
+  <depend>joint_state_publisher</depend>
+
   <exec_depend>ros2launch</exec_depend>
 
 
