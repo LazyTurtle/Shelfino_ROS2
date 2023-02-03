@@ -287,7 +287,7 @@ class RoadmapManager : public rclcpp::Node
     }
 
     void log(std::string log_str){
-      RCLCPP_INFO(this->get_logger(), log_str);
+      RCLCPP_INFO(this->get_logger(), log_str.c_str());
     }
 
     void set_borders(const geometry_msgs::msg::PolygonStamped::SharedPtr msg){
