@@ -35,12 +35,18 @@ ament_target_dependencies(roadmap_manager
   dubins_planner_msgs
   )
 
+add_executable(roadmap_driver src/roadmap_driver.cpp)
+ament_target_dependencies(roadmap_driver
+  rclcpp
+)
+
 target_include_directories(roadmap_manager PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 
 install(TARGETS
   roadmap_manager
+  roadmap_driver
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
