@@ -258,13 +258,13 @@ class RoadmapManager : public rclcpp::Node
       const auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
 
       border_subscriber = this->create_subscription<geometry_msgs::msg::PolygonStamped>(
-        "map_borders", qos, std::bind(&RoadmapManager::set_borders, this, _1));
+        "/map_borders", qos, std::bind(&RoadmapManager::set_borders, this, _1));
       
       obstacles_subscriber = this->create_subscription<obstacles_msgs::msg::ObstacleArrayMsg>(
-        "obstacles", qos, std::bind(&RoadmapManager::set_obstacles, this, _1));
+        "/obstacles", qos, std::bind(&RoadmapManager::set_obstacles, this, _1));
 
       gates_subscriber = this->create_subscription<geometry_msgs::msg::PoseArray>(
-        "gate_position", qos, std::bind(&RoadmapManager::set_gates, this, _1));
+        "/gate_position", qos, std::bind(&RoadmapManager::set_gates, this, _1));
 
       path_service = this->create_service<roadmap_interfaces::srv::PathService>(
         "compute_path", std::bind(&RoadmapManager::compute_path, this, _1, _2));

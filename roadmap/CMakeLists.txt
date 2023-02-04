@@ -38,6 +38,8 @@ ament_target_dependencies(roadmap_manager
 add_executable(roadmap_driver src/roadmap_driver.cpp)
 ament_target_dependencies(roadmap_driver
   rclcpp
+  geometry_msgs
+  roadmap_interfaces
 )
 
 target_include_directories(roadmap_manager PUBLIC
