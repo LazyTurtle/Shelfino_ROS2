@@ -221,6 +221,18 @@ class RoadmapManager : public rclcpp::Node
 
   private:
 
+    const std::string MAP_BORDER_TOPIC = "/map_borders";
+    const std::string OBSTACLES_TOPIC = "/obstacles";
+    const std::string GATES_TOPIC = "/gate_position";
+
+    const std::string COMPUTE_PATH_SERVICE_NAME = "compute_path";
+    const std::string TEST_SERVICE_NAME = "test_service";
+
+    const std::string MARKERS_TOPIC = "markers";
+    const std::string WIDTHS_TOPIC = "widths";
+
+    const std::string DUBINS_CALCULATOR_SERVICE = "multi_points_dubins_calculator";
+
     rclcpp::Subscription<geometry_msgs::msg::PolygonStamped>::SharedPtr border_subscriber;
     rclcpp::Subscription<obstacles_msgs::msg::ObstacleArrayMsg>::SharedPtr obstacles_subscriber;
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr gates_subscriber;
@@ -258,25 +270,25 @@ class RoadmapManager : public rclcpp::Node
       const auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
 
       border_subscriber = this->create_subscription<geometry_msgs::msg::PolygonStamped>(
-        "/map_borders", qos, std::bind(&RoadmapManager::set_borders, this, _1));
+        MAP_BORDER_TOPIC, qos, std::bind(&RoadmapManager::set_borders, this, _1));
       
       obstacles_subscriber = this->create_subscription<obstacles_msgs::msg::ObstacleArrayMsg>(
-        "/obstacles", qos, std::bind(&RoadmapManager::set_obstacles, this, _1));
+        OBSTACLES_TOPIC, qos, std::bind(&RoadmapManager::set_obstacles, this, _1));
 
       gates_subscriber = this->create_subscription<geometry_msgs::msg::PoseArray>(
-        "/gate_position", qos, std::bind(&RoadmapManager::set_gates, this, _1));
+        GATES_TOPIC, qos, std::bind(&RoadmapManager::set_gates, this, _1));
 
       path_service = this->create_service<roadmap_interfaces::srv::PathService>(
-        "compute_path", std::bind(&RoadmapManager::compute_path, this, _1, _2));
+        COMPUTE_PATH_SERVICE_NAME, std::bind(&RoadmapManager::compute_path, this, _1, _2));
 
       test_service = this->create_service<std_srvs::srv::Empty>(
-        "test_service", std::bind(&RoadmapManager::test, this, _1, _2));
+        TEST_SERVICE_NAME, std::bind(&RoadmapManager::test, this, _1, _2));
 
       markers_publisher = this->create_publisher<visualization_msgs::msg::MarkerArray>(
-        "markers", qos);
+        MARKERS_TOPIC, qos);
 
       widths_publisher = this->create_publisher<visualization_msgs::msg::MarkerArray>(
-        "widths", qos);
+        WIDTHS_TOPIC, qos);
 
       path_publisher = this->create_publisher<nav_msgs::msg::Path>(
         "path", qos);
@@ -340,7 +352,7 @@ class RoadmapManager : public rclcpp::Node
 
       std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("multi_points_dubins_calculator_client");
       rclcpp::Client<dubins_planner_msgs::srv::MultiPointDubinsPlanning>::SharedPtr client =
-        client_node->create_client<dubins_planner_msgs::srv::MultiPointDubinsPlanning>("multi_points_dubins_calculator");
+        client_node->create_client<dubins_planner_msgs::srv::MultiPointDubinsPlanning>(DUBINS_CALCULATOR_SERVICE);
       
       auto r = std::make_shared<dubins_planner_msgs::srv::MultiPointDubinsPlanning::Request>();
 
@@ -369,10 +381,10 @@ class RoadmapManager : public rclcpp::Node
 
       while (!client->wait_for_service(3s)) {
         if (!rclcpp::ok()) {
-        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Interrupted while waiting for the service. Exiting.");
+        log("Interrupted while waiting for the service. Exiting.");
         return;
         }
-        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "service not available, waiting again...");
+        log("service not available, waiting again...");
       }
       auto result = client->async_send_request(r);
       // Wait for the result.
@@ -384,7 +396,7 @@ class RoadmapManager : public rclcpp::Node
         
         calculated_path = temp_path;
       } else {
-        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed to call service dubins calculator");
+        log("Failed to call service dubins calculator");
       }
     }
 
@@ -518,10 +530,10 @@ class RoadmapManager : public rclcpp::Node
 
       while (!client->wait_for_service(3s)) {
         if (!rclcpp::ok()) {
-        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Interrupted while waiting for the multi_points_dubins_calculator service. Exiting.");
+        log("Interrupted while waiting for the multi_points_dubins_calculator service. Exiting.");
         return;
         }
-        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "service not available, waiting again...");
+        log("service not available, waiting again...");
       }
 
       auto result = client->async_send_request(r);
@@ -537,7 +549,7 @@ class RoadmapManager : public rclcpp::Node
         response->result = true;
         response->path = temp_path;
       } else {
-        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed to call service dubins calculator");
+        log("Failed to call service dubins calculator");
       }
 
     }

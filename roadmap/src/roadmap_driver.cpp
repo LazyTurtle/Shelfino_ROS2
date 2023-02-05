@@ -44,7 +44,7 @@ class RobotDriver : public rclcpp::Node
 
     const std::string ROADMAP_SERVICE_NAME = "compute_path";
     const std::string GATES_TOPIC = "/gate_position";
-    const std::string ROBOT_POSITION_TOPIC = "transform";
+    const std::string ROBOT_POSITION_TOPIC = "/shelfinoG/transform";
     const std::string PATH_TOPIC = "shortest_path";
 
     
