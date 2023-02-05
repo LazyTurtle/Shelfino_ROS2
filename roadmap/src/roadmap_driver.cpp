@@ -22,31 +22,41 @@ class RobotDriver : public rclcpp::Node
     void init(){
       const auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
 
-      
       gates_subscriber = this->create_subscription<geometry_msgs::msg::PoseArray>(
         GATES_TOPIC, qos, std::bind(&RobotDriver::set_gates, this, _1));
     
-      
       robot_position_subscriber = this->create_subscription<geometry_msgs::msg::TransformStamped>(
         ROBOT_POSITION_TOPIC, qos, std::bind(&RobotDriver::set_robot_position, this, _1));
+
+      path_publisher = this->create_publisher<nav_msgs::msg::Path>(PATH_TOPIC, qos);
+
+      timer = this->create_wall_timer(publishers_period, std::bind(&RobotDriver::publish, this));
       
       log("Ready.");
     }
 
   private:
-    // width + tollerance to be sure
-    const double ROBOT_WIDTH = 0.5 + 0.2;
+
+    const double ROBOT_WIDTH = 0.5;
+
+    std::chrono::milliseconds publishers_period = 1000ms;
+    rclcpp::TimerBase::SharedPtr timer;
 
     const std::string ROADMAP_SERVICE_NAME = "compute_path";
     const std::string GATES_TOPIC = "/gate_position";
     const std::string ROBOT_POSITION_TOPIC = "transform";
+    const std::string PATH_TOPIC = "shortest_path";
+
     
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr gates_subscriber;
     rclcpp::Subscription<geometry_msgs::msg::TransformStamped>::SharedPtr robot_position_subscriber;
-    
 
     std::shared_ptr<geometry_msgs::msg::PoseArray> gates;
     std::shared_ptr<geometry_msgs::msg::TransformStamped> robot_position;
+
+    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher;
+
+    std::shared_ptr<nav_msgs::msg::Path> path;
 
     void log(std::string log){
       RCLCPP_INFO(this->get_logger(), log.c_str());
@@ -64,7 +74,17 @@ class RobotDriver : public rclcpp::Node
       robot_position = msg;
     }
 
-    void guide_to_gate(){
+    void publish(){
+      if(!path){
+        get_path();
+      }else{
+        path_publisher->publish(*path);
+      }
+      
+    }
+
+    void get_path(){
+      
       if(!gates){
         err("Gates pointer is null");
         return;
@@ -74,7 +94,7 @@ class RobotDriver : public rclcpp::Node
         return;
       }
 
-      auto length_of_path = [](const nav_msgs::msg::Path path){
+      auto length_of_path = [](const nav_msgs::msg::Path& path){
         double length = 0.0;
         for(int i=1; i<path.poses.size(); i++){
           double dx = path.poses[i].pose.position.x - path.poses[i-1].pose.position.x;
@@ -103,7 +123,8 @@ class RobotDriver : public rclcpp::Node
         req->end.y = gate.position.z;
         req->end.z = gate.position.z;
 
-        req->minimum_path_width = ROBOT_WIDTH / 2.0;
+        // actually, half width plus a small tollerance
+        req->minimum_path_width = (ROBOT_WIDTH / 2.0) + 0.1;
 
         while (!client->wait_for_service(1s)){
           if (!rclcpp::ok()){
@@ -130,8 +151,11 @@ class RobotDriver : public rclcpp::Node
       for(auto path:possible_paths){
         lengths.push_back(length_of_path(path));
       }
-      
 
+      auto min_itr = std::min_element(lengths.begin(), lengths.end());
+      int min_index = std::distance(lengths.begin(), min_itr);
+
+      path = std::make_shared<nav_msgs::msg::Path>(possible_paths[min_index]);
 
 
     }
