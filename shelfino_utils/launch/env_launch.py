@@ -28,6 +28,11 @@ def generate_launch_description():
             output='screen',
         ),
         Node(
+            package='roadmap',
+            executable='roadmap_manager',
+            output='screen',
+        ),
+        Node(
             package='rviz2',
             executable='rviz2',
             arguments=['-d', os.path.join(my_package_dir, 'config', 'testing.rviz')],
