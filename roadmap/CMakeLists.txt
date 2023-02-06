@@ -40,6 +40,7 @@ ament_target_dependencies(roadmap_driver
   rclcpp
   geometry_msgs
   roadmap_interfaces
+  std_srvs
 )
 
 target_include_directories(roadmap_manager PUBLIC

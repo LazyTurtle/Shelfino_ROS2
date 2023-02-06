@@ -4,12 +4,14 @@
 #include <string>
 
 #include "rclcpp/rclcpp.hpp"
+#include "std_srvs/srv/empty.hpp"
 #include "geometry_msgs/msg/pose_array.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "roadmap_interfaces/srv/path_service.hpp"
 
 using std::placeholders::_1;
+using std::placeholders::_2;
 
 using namespace std::chrono_literals;
 
@@ -28,6 +30,10 @@ class RobotDriver : public rclcpp::Node
       robot_position_subscriber = this->create_subscription<geometry_msgs::msg::TransformStamped>(
         ROBOT_POSITION_TOPIC, qos, std::bind(&RobotDriver::set_robot_position, this, _1));
 
+      test_service = this->create_service<std_srvs::srv::Empty>(
+        "test_drive", std::bind(&RobotDriver::test, this, _1, _2));
+
+
       path_publisher = this->create_publisher<nav_msgs::msg::Path>(PATH_TOPIC, qos);
 
       timer = this->create_wall_timer(publishers_period, std::bind(&RobotDriver::publish, this));
@@ -37,9 +43,11 @@ class RobotDriver : public rclcpp::Node
 
   private:
 
+    rclcpp::Service<std_srvs::srv::Empty>::SharedPtr test_service;
+
     const double ROBOT_WIDTH = 0.5;
 
-    std::chrono::milliseconds publishers_period = 1000ms;
+    const std::chrono::milliseconds publishers_period = 1000ms;
     rclcpp::TimerBase::SharedPtr timer;
 
     const std::string ROADMAP_SERVICE_NAME = "compute_path";
@@ -75,12 +83,14 @@ class RobotDriver : public rclcpp::Node
     }
 
     void publish(){
-      if(!path){
-        get_path();
-      }else{
+      if(path)
         path_publisher->publish(*path);
-      }
-      
+    }
+
+    void test(
+      const std::shared_ptr<std_srvs::srv::Empty_Request> request,
+      std::shared_ptr<std_srvs::srv::Empty_Response> response){
+      get_path();
     }
 
     void get_path(){
@@ -112,6 +122,11 @@ class RobotDriver : public rclcpp::Node
       std::vector<nav_msgs::msg::Path> possible_paths;
 
       for(auto gate:gates->poses){
+        {
+          std::ostringstream s;
+          s<<"Lookign for path to x:"<<gate.position.x<<" y:"<<gate.position.y;
+          log(s.str());
+        }
 
         auto req = std::make_shared<roadmap_interfaces::srv::PathService::Request>();
 
@@ -120,7 +135,7 @@ class RobotDriver : public rclcpp::Node
         req->start.z = robot_position->transform.translation.z;
 
         req->end.x = gate.position.x;
-        req->end.y = gate.position.z;
+        req->end.y = gate.position.y;
         req->end.z = gate.position.z;
 
         // actually, half width plus a small tollerance
@@ -133,13 +148,14 @@ class RobotDriver : public rclcpp::Node
           }
           log("service not available, waiting again...");
         }
-
+        log("Requesting path from roadmap manager.");
         auto result = client->async_send_request(req);
 
-        if (rclcpp::spin_until_future_complete(client_node, result) ==
-          rclcpp::FutureReturnCode::SUCCESS){
-          if(result.get()->result)
-            possible_paths.push_back(result.get()->path);
+        if (rclcpp::spin_until_future_complete(client_node, result) == rclcpp::FutureReturnCode::SUCCESS){
+          auto res = result.get();
+
+          if(res->result)
+            possible_paths.push_back(res->path);
           else
             err("There was no availabe path.");
         }else{
@@ -156,7 +172,7 @@ class RobotDriver : public rclcpp::Node
       int min_index = std::distance(lengths.begin(), min_itr);
 
       path = std::make_shared<nav_msgs::msg::Path>(possible_paths[min_index]);
-
+      log("Shortest path obtained.");
 
     }
 
