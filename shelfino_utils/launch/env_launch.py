@@ -2,6 +2,7 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 import os
 from ament_index_python.packages import get_package_share_directory
+remappings = [('/tf', 'tf'), ('/tf_static', 'tf_static')]
 
 def generate_launch_description():
     my_package_dir = get_package_share_directory("shelfino_utils")
@@ -27,9 +28,23 @@ def generate_launch_description():
             output='screen',
         ),
         Node(
+            package='roadmap',
+            executable='manager',
+            output='screen',
+            namespace='shelfinoG',
+        ),        
+        Node(
+            package='roadmap',
+            executable='driver',
+            output='screen',
+            namespace='shelfinoG',
+        ),
+        Node(
             package='rviz2',
             executable='rviz2',
             arguments=['-d', os.path.join(my_package_dir, 'config', 'testing.rviz')],
+            remappings = remappings,
+            namespace='shelfinoG',
             parameters=[{'use_sim_time': True}],
             output='screen',
         )

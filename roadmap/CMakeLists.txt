@@ -21,8 +21,8 @@ find_package(dubins_planner_msgs REQUIRED)
 
 include_directories(include)
 
-add_executable(roadmap_manager src/roadmap_manager.cpp)
-ament_target_dependencies(roadmap_manager 
+add_executable(manager src/roadmap_manager.cpp)
+ament_target_dependencies(manager 
   rclcpp 
   nav_msgs 
   std_msgs 
@@ -35,12 +35,21 @@ ament_target_dependencies(roadmap_manager
   dubins_planner_msgs
   )
 
-target_include_directories(roadmap_manager PUBLIC
+add_executable(driver src/roadmap_driver.cpp)
+ament_target_dependencies(driver
+  rclcpp
+  geometry_msgs
+  roadmap_interfaces
+  std_srvs
+)
+
+target_include_directories(manager PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 
 install(TARGETS
-  roadmap_manager
+  manager
+  driver
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)

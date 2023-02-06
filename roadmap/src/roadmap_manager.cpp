@@ -108,7 +108,7 @@ class Graph{
 
       int closest = -1;
       double min_dist = std::numeric_limits<double>().infinity();
-      for(int i=0; i<nodes.size(); i++){
+      for(std::size_t i=0; i<nodes.size(); i++){
         if(!has_edges_wide_enough(i, minimum_width))
           continue;
         double dist = Node::distance(x,y,nodes[i].x,nodes[i].y);
@@ -137,7 +137,7 @@ class Graph{
 
       std::vector<double> heuristic, g_score, f_score;
 
-      for(int i = 0; i<nodes.size(); i++){
+      for(std::size_t i = 0; i<nodes.size(); i++){
         heuristic.push_back(Node::distance(nodes[end],nodes[i]));
       }
 
@@ -221,30 +221,43 @@ class RoadmapManager : public rclcpp::Node
 
   private:
 
+    const double MAXIMUM_CURVATURE = 4.0;
+    const int DISCRETIZATION_DELTA = 4;
+    const int REFINEMENTS = 3;
+    const double MINIMUM_WAYPOINT_DISTANCE = 0.5;
+
+    const std::string MAP_BORDER_TOPIC = "/map_borders";
+    const std::string OBSTACLES_TOPIC = "/obstacles";
+    const std::string GATES_TOPIC = "/gate_position";
+
+    const std::string COMPUTE_PATH_SERVICE_NAME = "compute_path";
+
+    const std::string MARKERS_TOPIC = "markers";
+    const std::string WIDTHS_TOPIC = "widths";
+
+    const std::string DUBINS_CALCULATOR_SERVICE = "/multi_points_dubins_calculator";
+
     rclcpp::Subscription<geometry_msgs::msg::PolygonStamped>::SharedPtr border_subscriber;
     rclcpp::Subscription<obstacles_msgs::msg::ObstacleArrayMsg>::SharedPtr obstacles_subscriber;
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr gates_subscriber;
 
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_publisher;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr widths_publisher;
-    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher;
 
     rclcpp::TimerBase::SharedPtr timer_;
 
     rclcpp::Service<roadmap_interfaces::srv::PathService>::SharedPtr path_service;
-    rclcpp::Service<std_srvs::srv::Empty>::SharedPtr test_service;
 
     std::shared_ptr<geometry_msgs::msg::PolygonStamped> borders_msg;
     std::shared_ptr<obstacles_msgs::msg::ObstacleArrayMsg> obstacles_msg;
     std::shared_ptr<geometry_msgs::msg::PoseArray> gates_msg;
 
     visualization_msgs::msg::MarkerArray markers;
-    enum markers_enum {voronoi, waypoints, path_points};
-    int MARKERS_NUM = 3;
+    enum markers_enum {voronoi, waypoints, obstacles, other_robots};
+    int MARKERS_NUM = 4;
 
     visualization_msgs::msg::MarkerArray width_text;
 
-    nav_msgs::msg::Path calculated_path;
     voronoi_diagram<double> vd;
     Graph search_graph;
     std::vector<BoostSegment> segments_data;
@@ -258,28 +271,22 @@ class RoadmapManager : public rclcpp::Node
       const auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
 
       border_subscriber = this->create_subscription<geometry_msgs::msg::PolygonStamped>(
-        "map_borders", qos, std::bind(&RoadmapManager::set_borders, this, _1));
+        MAP_BORDER_TOPIC, qos, std::bind(&RoadmapManager::set_borders, this, _1));
       
       obstacles_subscriber = this->create_subscription<obstacles_msgs::msg::ObstacleArrayMsg>(
-        "obstacles", qos, std::bind(&RoadmapManager::set_obstacles, this, _1));
+        OBSTACLES_TOPIC, qos, std::bind(&RoadmapManager::set_obstacles, this, _1));
 
       gates_subscriber = this->create_subscription<geometry_msgs::msg::PoseArray>(
-        "gate_position", qos, std::bind(&RoadmapManager::set_gates, this, _1));
+        GATES_TOPIC, qos, std::bind(&RoadmapManager::set_gates, this, _1));
 
       path_service = this->create_service<roadmap_interfaces::srv::PathService>(
-        "compute_path", std::bind(&RoadmapManager::compute_path, this, _1, _2));
-
-      test_service = this->create_service<std_srvs::srv::Empty>(
-        "test_service", std::bind(&RoadmapManager::test, this, _1, _2));
+        COMPUTE_PATH_SERVICE_NAME, std::bind(&RoadmapManager::compute_path, this, _1, _2));
 
       markers_publisher = this->create_publisher<visualization_msgs::msg::MarkerArray>(
-        "markers", qos);
+        MARKERS_TOPIC, qos);
 
       widths_publisher = this->create_publisher<visualization_msgs::msg::MarkerArray>(
-        "widths", qos);
-
-      path_publisher = this->create_publisher<nav_msgs::msg::Path>(
-        "path", qos);
+        WIDTHS_TOPIC, qos);
       
       markers.markers = std::vector<visualization_msgs::msg::Marker>(MARKERS_NUM);
 
@@ -291,12 +298,17 @@ class RoadmapManager : public rclcpp::Node
       RCLCPP_INFO(this->get_logger(), log_str.c_str());
     }
 
+    void err(std::string log_str){
+      RCLCPP_ERROR(this->get_logger(), log_str.c_str());
+    }
+
     void set_borders(const geometry_msgs::msg::PolygonStamped::SharedPtr msg){
       borders_msg = msg;
     }
 
     void set_obstacles(const obstacles_msgs::msg::ObstacleArrayMsg::SharedPtr msg){
       obstacles_msg = msg;
+      add_obstacles_markers();
     }
 
     void set_gates(const geometry_msgs::msg::PoseArray::SharedPtr msg){
@@ -306,41 +318,45 @@ class RoadmapManager : public rclcpp::Node
     void publish_data(){
       markers_publisher->publish(markers);
       widths_publisher->publish(width_text);
-      path_publisher->publish(calculated_path);
     }
 
-    void test(
-      const std::shared_ptr<std_srvs::srv::Empty_Request> request,
-      std::shared_ptr<std_srvs::srv::Empty_Response> response){
+    void compute_path(
+      const std::shared_ptr<roadmap_interfaces::srv::PathService_Request> request,
+      std::shared_ptr<roadmap_interfaces::srv::PathService_Response> response){
       
-      log("Start testing.");
-      update_voronoi_diagram();
-
-      double start_x = -1.0;
-      double start_y = -4.0;
-      double end_x = -1.0;
-      double end_y = 3.6;
-
-      double minimum_width = 0.69;
+      log("Start calculating a new path.");
+      if(!update_voronoi_diagram()){
+        err("Cannot update the voronoi diagram");
+      }
+      
+      double start_x = request->start.x;
+      double start_y = request->start.y;
+      double end_x = request->end.x;
+      double end_y = request->end.y;
+      double minimum_width = request->minimum_path_width;
 
 
       int closest_node_to_start = search_graph.find_closest(start_x, start_y, minimum_width);
       int closest_node_to_end = search_graph.find_closest(end_x, end_y, minimum_width);
-      double tollerance = 0.3;
-      
-      std::vector<int> path_int = search_graph.find_path(closest_node_to_start, closest_node_to_end, tollerance, minimum_width);
+
+      if(closest_node_to_start < 0 || closest_node_to_end< 0){
+        err("Error while looking for the closest nodes.");
+        return;
+      }
+
+      std::vector<int> path_int = search_graph.find_path(
+        closest_node_to_start, closest_node_to_end, MINIMUM_WAYPOINT_DISTANCE, minimum_width);
 
       if(path_int.size()==0){
         std::ostringstream s;
         s<<"No path found from ["<<start_x<<","<<start_y<<"] to ["<<end_x<<","<<end_y<<"].";
         log(s.str());
-        // TODO: add negative response data
         return;
       }
 
-      std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("multi_points_dubins_calculator_client");
+      std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("dubins_client");
       rclcpp::Client<dubins_planner_msgs::srv::MultiPointDubinsPlanning>::SharedPtr client =
-        client_node->create_client<dubins_planner_msgs::srv::MultiPointDubinsPlanning>("multi_points_dubins_calculator");
+        client_node->create_client<dubins_planner_msgs::srv::MultiPointDubinsPlanning>(DUBINS_CALCULATOR_SERVICE);
       
       auto r = std::make_shared<dubins_planner_msgs::srv::MultiPointDubinsPlanning::Request>();
 
@@ -359,40 +375,40 @@ class RoadmapManager : public rclcpp::Node
       p.y = end_y;
       path_geo.push_back(p);
 
-      add_points_marker(path_geo, markers_enum::path_points, 0.2, 0.5, 0.5, 0.8);
-
-
       r->points = path_geo;
-      r->kmax = 6;
-      r->komega = 4;
-      r->refinements = 3;
+      r->kmax = MAXIMUM_CURVATURE;
+      r->komega = DISCRETIZATION_DELTA;
+      r->refinements = REFINEMENTS;
 
-      while (!client->wait_for_service(3s)) {
+      while (!client->wait_for_service(1s)) {
         if (!rclcpp::ok()) {
-        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Interrupted while waiting for the service. Exiting.");
+        err("Interrupted while waiting for the service. Exiting.");
         return;
         }
-        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "service not available, waiting again...");
+        log("service not available, waiting again...");
       }
+
       auto result = client->async_send_request(r);
-      // Wait for the result.
+      
       if (rclcpp::spin_until_future_complete(client_node, result) == rclcpp::FutureReturnCode::SUCCESS){
-        log("Path obtained.");
-        auto temp_path = result.get()->path;
-        temp_path.header.frame_id = "map";
-        temp_path.header.stamp = this->now();
-        
-        calculated_path = temp_path;
+        auto temp = result.get();        
+        response->path = temp->path;
+        response->path.header.frame_id = "map";
+        response->path.header.stamp = this->now();
+        response->result = true;
+        log("Path calculated, length: "+std::to_string(temp->lenght));
+        return;
       } else {
-        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed to call service dubins calculator");
+        err("Failed to call service: "+DUBINS_CALCULATOR_SERVICE);
+        return;
       }
     }
 
-    void update_voronoi_diagram(){
-      
+    bool update_voronoi_diagram(){
+
       if(!borders_msg || !obstacles_msg){
         log("Pointers not ready.");
-        return;
+        return false;
       }
       log("Start updating the voronoi diagram.");
 
@@ -415,15 +431,16 @@ class RoadmapManager : public rclcpp::Node
 
       add_ids_to_vertices();
       search_graph = build_search_graph();
-      update_diagram_marker();
+      update_diagram_markers();
       add_width_markers(search_graph);
 
+      return true;
     }
 
     void add_polygon_to_boost_segments(
       const geometry_msgs::msg::Polygon& poly, std::vector<BoostSegment>& segments){
 
-      for(int i = 0; i<poly.points.size()-1; i++){
+      for(std::size_t i = 0; i<poly.points.size()-1; i++){
         BoostPoint a = g2b_p(poly.points[i], scale);
         BoostPoint b = g2b_p(poly.points[i+1], scale);
         BoostSegment segment(a, b);
@@ -459,90 +476,7 @@ class RoadmapManager : public rclcpp::Node
       return p;
     }
 
-    void compute_path(
-      const std::shared_ptr<roadmap_interfaces::srv::PathService_Request> request,
-      std::shared_ptr<roadmap_interfaces::srv::PathService_Response> response){
-
-      log("Start computation.");
-      update_voronoi_diagram();
-      response->result = false;
-      double start_x = request->start.x;
-      double start_y = request->start.y;
-      double end_x = request->end.x;
-      double end_y = request->end.y;
-
-      double minimum_width = request->minimum_path_width;
-
-
-      int closest_node_to_start = search_graph.find_closest(start_x, start_y, minimum_width);
-      int closest_node_to_end = search_graph.find_closest(end_x, end_y, minimum_width);
-      double tollerance = 0.3;
-      
-      std::vector<int> path_int = search_graph.find_path(closest_node_to_start, closest_node_to_end, tollerance, minimum_width);
-
-      if(path_int.size()==0){
-        std::ostringstream s;
-        s<<"No path found from ["<<start_x<<","<<start_y<<"] to ["<<end_x<<","<<end_y<<"].";
-        log(s.str());
-        return;
-      }
-
-      std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("multi_points_dubins_calculator_client");
-      rclcpp::Client<dubins_planner_msgs::srv::MultiPointDubinsPlanning>::SharedPtr client =
-        client_node->create_client<dubins_planner_msgs::srv::MultiPointDubinsPlanning>("multi_points_dubins_calculator");
-      
-      auto r = std::make_shared<dubins_planner_msgs::srv::MultiPointDubinsPlanning::Request>();
-
-      std::vector<geometry_msgs::msg::Point> path_geo;
-      geometry_msgs::msg::Point p;
-      p.x = start_x;
-      p.y = start_y;
-      path_geo.push_back(p);
-      for(int i:path_int){
-        geometry_msgs::msg::Point p;
-        p.x = search_graph.nodes[i].x;
-        p.y = search_graph.nodes[i].y;
-        path_geo.push_back(p);
-      }
-      p.x = end_x;
-      p.y = end_y;
-      path_geo.push_back(p);
-
-      add_points_marker(path_geo, markers_enum::path_points, 0.2, 0.5, 0.5, 0.8);
-
-
-      r->points = path_geo;
-      r->kmax = 5;
-      r->komega = 4;
-      r->refinements = 3;
-
-      while (!client->wait_for_service(3s)) {
-        if (!rclcpp::ok()) {
-        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Interrupted while waiting for the multi_points_dubins_calculator service. Exiting.");
-        return;
-        }
-        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "service not available, waiting again...");
-      }
-
-      auto result = client->async_send_request(r);
-      // Wait for the result.
-      if (rclcpp::spin_until_future_complete(client_node, result) == rclcpp::FutureReturnCode::SUCCESS){
-        log("Path obtained.");
-        auto temp_path = result.get()->path;
-        temp_path.header.frame_id = "map";
-        temp_path.header.stamp = this->now();
-        
-        calculated_path = temp_path;
-
-        response->result = true;
-        response->path = temp_path;
-      } else {
-        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed to call service dubins calculator");
-      }
-
-    }
-
-    void update_diagram_marker(){
+    void update_diagram_markers(){
       std::vector<geometry_msgs::msg::Point> nodes_coordinates;
       visualization_msgs::msg::Marker marker;
 
@@ -565,6 +499,8 @@ class RoadmapManager : public rclcpp::Node
         ma.y = node.y;
         nodes_coordinates.push_back(ma);
         for(auto neighbour:node.neighbours){
+          // this actually create twice as many segments as needed
+          // but it works fine and it's a pain to use BFS only for this
           geometry_msgs::msg::Point mb;
           mb.x = search_graph.nodes[neighbour].x;
           mb.y = search_graph.nodes[neighbour].y;
@@ -576,10 +512,10 @@ class RoadmapManager : public rclcpp::Node
 
       markers.markers[markers_enum::voronoi] = marker;
       log("Updated voronoi graph marker.");
-      add_points_marker(nodes_coordinates, markers_enum::waypoints);
+      add_points_markers(nodes_coordinates, markers_enum::waypoints);
     }
 
-    void add_points_marker(
+    void add_points_markers(
       const std::vector<geometry_msgs::msg::Point>& point_list,
       markers_enum type = markers_enum::waypoints, double l = 0.1,
       double r=0.5, double g=0.5, double b=0.5){
@@ -604,10 +540,64 @@ class RoadmapManager : public rclcpp::Node
       log("Updated waypoints marker at "+std::to_string(type)+".");
     }
 
+    void add_obstacles_markers(){
+      std::vector<geometry_msgs::msg::Polygon> polygons;
+      for(auto obs:obstacles_msg->obstacles){
+        polygons.push_back(obs.polygon);
+      }
+      add_obstacles_markers(polygons, markers_enum::obstacles);
+    }
+
+    void add_obstacles_markers(
+      const std::vector<geometry_msgs::msg::Polygon> obstacles, markers_enum type){
+      
+      auto tp = [](const geometry_msgs::msg::Point32 p){
+        geometry_msgs::msg::Point a;
+        a.x = p.x;
+        a.y = p.y;
+        a.z = p.z;
+        return a;
+      };
+      auto extract_segment = [tp](const geometry_msgs::msg::Polygon polygon){
+        std::vector<std::pair<geometry_msgs::msg::Point, geometry_msgs::msg::Point>> segments;
+        for(std::size_t i = 0; i<polygon.points.size(); i++){
+          geometry_msgs::msg::Point a = tp(polygon.points[i]);
+          geometry_msgs::msg::Point b = tp(polygon.points[(i+1)%polygon.points.size()]);
+          segments.push_back(std::make_pair(a,b));
+        }
+        return segments;
+      };
+
+      visualization_msgs::msg::Marker marker;
+      marker.header.stamp = this->now();
+      marker.header.frame_id = "map";
+      marker.id = type;
+      marker.action = visualization_msgs::msg::Marker::ADD;
+      marker.type = visualization_msgs::msg::Marker::LINE_LIST;
+      marker.scale.x = 0.05;
+      marker.scale.y = 0.1;
+      marker.scale.z = 0.1;
+      marker.color.a = 1.0;
+      marker.color.r = 0.9;
+      marker.color.g = 0.1;
+      marker.color.b = 0.1;
+
+      for(auto obs:obstacles){
+        auto segments = extract_segment(obs);
+        for(auto seg:segments){
+          marker.points.push_back(seg.first);
+          marker.points.push_back(seg.second);
+        }
+      }
+
+      markers.markers[type] = marker;
+      log("Updated obstacles markers at "+std::to_string(type));
+    }
+
     void add_width_markers(Graph& graph){
       visualization_msgs::msg::MarkerArray text_array;
       int id = 0;
-      for(int i=0; i<graph.nodes.size(); i++){
+      for(std::size_t i=0; i<graph.nodes.size(); i++){
         for(int j:graph.nodes[i].neighbours){
           visualization_msgs::msg::Marker marker;
           marker.header.stamp = this->now();
@@ -728,7 +718,7 @@ class RoadmapManager : public rclcpp::Node
             // the edge has been divided into multiple edges
             int new_nodes = points.size()-2;
             int first_new_index = graph.nodes.size();
-            for(int i = 1; i<points.size()-1; i++){
+            for(std::size_t i = 1; i<points.size()-1; i++){
               graph.add_node(points[i].x()/scale, points[i].y()/scale);
             }
             int prev = v0->color();
