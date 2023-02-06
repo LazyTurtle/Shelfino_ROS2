@@ -29,8 +29,15 @@ def generate_launch_description():
         ),
         Node(
             package='roadmap',
-            executable='roadmap_manager',
+            executable='manager',
             output='screen',
+            namespace='shelfinoG',
+        ),        
+        Node(
+            package='roadmap',
+            executable='driver',
+            output='screen',
+            namespace='shelfinoG',
         ),
         Node(
             package='rviz2',

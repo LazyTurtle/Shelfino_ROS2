@@ -236,7 +236,7 @@ class RoadmapManager : public rclcpp::Node
     const std::string MARKERS_TOPIC = "markers";
     const std::string WIDTHS_TOPIC = "widths";
 
-    const std::string DUBINS_CALCULATOR_SERVICE = "multi_points_dubins_calculator";
+    const std::string DUBINS_CALCULATOR_SERVICE = "/multi_points_dubins_calculator";
 
     rclcpp::Subscription<geometry_msgs::msg::PolygonStamped>::SharedPtr border_subscriber;
     rclcpp::Subscription<obstacles_msgs::msg::ObstacleArrayMsg>::SharedPtr obstacles_subscriber;
@@ -364,7 +364,7 @@ class RoadmapManager : public rclcpp::Node
         return;
       }
 
-      std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared(DUBINS_CALCULATOR_SERVICE+"_client");
+      std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("dubins_client");
       rclcpp::Client<dubins_planner_msgs::srv::MultiPointDubinsPlanning>::SharedPtr client =
         client_node->create_client<dubins_planner_msgs::srv::MultiPointDubinsPlanning>(DUBINS_CALCULATOR_SERVICE);
       

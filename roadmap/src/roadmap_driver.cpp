@@ -52,7 +52,7 @@ class RobotDriver : public rclcpp::Node
 
     const std::string ROADMAP_SERVICE_NAME = "compute_path";
     const std::string GATES_TOPIC = "/gate_position";
-    const std::string ROBOT_POSITION_TOPIC = "/shelfinoG/transform";
+    const std::string ROBOT_POSITION_TOPIC = "transform";
     const std::string PATH_TOPIC = "shortest_path";
 
     
@@ -116,7 +116,7 @@ class RobotDriver : public rclcpp::Node
         return length;
       };
 
-      std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("roadmap_client");
+      std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared(ROADMAP_SERVICE_NAME+"_client");
       auto client = client_node->create_client<roadmap_interfaces::srv::PathService>(ROADMAP_SERVICE_NAME);
       
       std::vector<nav_msgs::msg::Path> possible_paths;
