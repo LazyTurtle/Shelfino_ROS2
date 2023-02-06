@@ -253,8 +253,8 @@ class RoadmapManager : public rclcpp::Node
     std::shared_ptr<geometry_msgs::msg::PoseArray> gates_msg;
 
     visualization_msgs::msg::MarkerArray markers;
-    enum markers_enum {voronoi, waypoints, path_points};
-    int MARKERS_NUM = 3;
+    enum markers_enum {voronoi, waypoints, obstacles, other_robots};
+    int MARKERS_NUM = 4;
 
     visualization_msgs::msg::MarkerArray width_text;
 
@@ -308,6 +308,7 @@ class RoadmapManager : public rclcpp::Node
 
     void set_obstacles(const obstacles_msgs::msg::ObstacleArrayMsg::SharedPtr msg){
       obstacles_msg = msg;
+      add_obstacles_markers();
     }
 
     void set_gates(const geometry_msgs::msg::PoseArray::SharedPtr msg){
@@ -374,8 +375,6 @@ class RoadmapManager : public rclcpp::Node
       p.y = end_y;
       path_geo.push_back(p);
 
-      add_points_marker(path_geo, markers_enum::path_points, 0.2, 0.5, 0.5, 0.8);
-
       r->points = path_geo;
       r->kmax = MAXIMUM_CURVATURE;
       r->komega = DISCRETIZATION_DELTA;
@@ -432,7 +431,7 @@ class RoadmapManager : public rclcpp::Node
 
       add_ids_to_vertices();
       search_graph = build_search_graph();
-      update_diagram_marker();
+      update_diagram_markers();
       add_width_markers(search_graph);
 
       return true;
@@ -477,7 +476,7 @@ class RoadmapManager : public rclcpp::Node
       return p;
     }
 
-    void update_diagram_marker(){
+    void update_diagram_markers(){
       std::vector<geometry_msgs::msg::Point> nodes_coordinates;
       visualization_msgs::msg::Marker marker;
 
@@ -500,6 +499,8 @@ class RoadmapManager : public rclcpp::Node
         ma.y = node.y;
         nodes_coordinates.push_back(ma);
         for(auto neighbour:node.neighbours){
+          // this actually create twice as many segments as needed
+          // but it works fine and it's a pain to use BFS only for this
           geometry_msgs::msg::Point mb;
           mb.x = search_graph.nodes[neighbour].x;
           mb.y = search_graph.nodes[neighbour].y;
@@ -511,10 +512,10 @@ class RoadmapManager : public rclcpp::Node
 
       markers.markers[markers_enum::voronoi] = marker;
       log("Updated voronoi graph marker.");
-      add_points_marker(nodes_coordinates, markers_enum::waypoints);
+      add_points_markers(nodes_coordinates, markers_enum::waypoints);
     }
 
-    void add_points_marker(
+    void add_points_markers(
       const std::vector<geometry_msgs::msg::Point>& point_list,
       markers_enum type = markers_enum::waypoints, double l = 0.1,
       double r=0.5, double g=0.5, double b=0.5){
@@ -537,6 +538,60 @@ class RoadmapManager : public rclcpp::Node
 
       markers.markers[type] = marker;
       log("Updated waypoints marker at "+std::to_string(type)+".");
+    }
+
+    void add_obstacles_markers(){
+      std::vector<geometry_msgs::msg::Polygon> polygons;
+      for(auto obs:obstacles_msg->obstacles){
+        polygons.push_back(obs.polygon);
+      }
+      add_obstacles_markers(polygons, markers_enum::obstacles);
+    }
+
+    void add_obstacles_markers(
+      const std::vector<geometry_msgs::msg::Polygon> obstacles, markers_enum type){
+      
+      auto tp = [](const geometry_msgs::msg::Point32 p){
+        geometry_msgs::msg::Point a;
+        a.x = p.x;
+        a.y = p.y;
+        a.z = p.z;
+        return a;
+      };
+      auto extract_segment = [tp](const geometry_msgs::msg::Polygon polygon){
+        std::vector<std::pair<geometry_msgs::msg::Point, geometry_msgs::msg::Point>> segments;
+        for(std::size_t i = 0; i<polygon.points.size(); i++){
+          geometry_msgs::msg::Point a = tp(polygon.points[i]);
+          geometry_msgs::msg::Point b = tp(polygon.points[(i+1)%polygon.points.size()]);
+          segments.push_back(std::make_pair(a,b));
+        }
+        return segments;
+      };
+
+      visualization_msgs::msg::Marker marker;
+      marker.header.stamp = this->now();
+      marker.header.frame_id = "map";
+      marker.id = type;
+      marker.action = visualization_msgs::msg::Marker::ADD;
+      marker.type = visualization_msgs::msg::Marker::LINE_LIST;
+      marker.scale.x = 0.05;
+      marker.scale.y = 0.1;
+      marker.scale.z = 0.1;
+      marker.color.a = 1.0;
+      marker.color.r = 0.9;
+      marker.color.g = 0.1;
+      marker.color.b = 0.1;
+
+      for(auto obs:obstacles){
+        auto segments = extract_segment(obs);
+        for(auto seg:segments){
+          marker.points.push_back(seg.first);
+          marker.points.push_back(seg.second);
+        }
+      }
+
+      markers.markers[type] = marker;
+      log("Updated obstacles markers at "+std::to_string(type));
     }
 
     void add_width_markers(Graph& graph){
