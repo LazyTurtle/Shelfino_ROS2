@@ -33,6 +33,7 @@ def generate_launch_description():
     rviz_config = os.path.join(get_package_share_directory('shelfino_gazebo'), 'rviz', 'shelfinoG.rviz')
 
     remappings = [('/tf', 'tf'), ('/tf_static', 'tf_static')]
+    ns = "shelfino1"
 
     return LaunchDescription([
         DeclareLaunchArgument(name='gui', default_value='true', choices=['true', 'false'],
@@ -60,19 +61,19 @@ def generate_launch_description():
             executable='spawn_entity.py',
             arguments=['-file', model,
                        '-entity', 'shelfino',
-                       '-robot_namespace', 'shelfinoG']
+                       '-robot_namespace', ns]
         ),
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([launch_file_dir, '/robot_state_publisher.launch.py']),
             launch_arguments={'use_sim_time': use_sim_time,
-                              'robot_id': 'shelfinoG'}.items()
+                              'robot_id': ns}.items()
         ),
 
         Node(
             package='rviz2',
             executable='rviz2',
-            namespace='shelfinoG',
+            namespace=ns,
             arguments=['-d', rviz_config],
             condition=IfCondition(rviz),
             remappings=remappings
@@ -81,7 +82,7 @@ def generate_launch_description():
             package="tf2_ros",
             executable="static_transform_publisher",
             output="screen" ,
-            namespace='shelfinoG',
+            namespace=ns,
             remappings=remappings,
             arguments=["0", "0", "0", "0", "0", "0", "map", "odom"]
         ),
@@ -89,7 +90,7 @@ def generate_launch_description():
         Node(
             package='get_positions',
             executable='get_positions',
-            namespace='shelfinoG',
+            namespace=ns,
             remappings=remappings
         ),
     ])

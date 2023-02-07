@@ -38,7 +38,8 @@ class RobotDriver : public rclcpp::Node
 
       timer = this->create_wall_timer(publishers_period, std::bind(&RobotDriver::publish, this));
       
-      log("Ready.");
+      robot_id = get_robot_id();
+      log("Driver "+std::to_string(robot_id)+" ready.");
     }
 
   private:
@@ -55,6 +56,7 @@ class RobotDriver : public rclcpp::Node
     const std::string ROBOT_POSITION_TOPIC = "transform";
     const std::string PATH_TOPIC = "shortest_path";
 
+    int robot_id;
     
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr gates_subscriber;
     rclcpp::Subscription<geometry_msgs::msg::TransformStamped>::SharedPtr robot_position_subscriber;
@@ -80,6 +82,13 @@ class RobotDriver : public rclcpp::Node
 
     void set_robot_position(const geometry_msgs::msg::TransformStamped::SharedPtr msg){
       robot_position = msg;
+    }
+
+    int get_robot_id(){
+      std::string ns = this->get_namespace();
+      std::string s(1,ns.back());
+      int id = std::stoi(s);
+      return id;
     }
 
     void publish(){

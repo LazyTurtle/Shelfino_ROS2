@@ -254,7 +254,7 @@ class RoadmapManager : public rclcpp::Node
 
     visualization_msgs::msg::MarkerArray markers;
     enum markers_enum {voronoi, waypoints, obstacles, other_robots};
-    int MARKERS_NUM = 4;
+    int MARKERS_NUM = 3;
 
     visualization_msgs::msg::MarkerArray width_text;
 
@@ -308,6 +308,7 @@ class RoadmapManager : public rclcpp::Node
 
     void set_obstacles(const obstacles_msgs::msg::ObstacleArrayMsg::SharedPtr msg){
       obstacles_msg = msg;
+      // TODO: we could check to only remake the markers if there are new values
       add_obstacles_markers();
     }
 
@@ -545,11 +546,11 @@ class RoadmapManager : public rclcpp::Node
       for(auto obs:obstacles_msg->obstacles){
         polygons.push_back(obs.polygon);
       }
-      add_obstacles_markers(polygons, markers_enum::obstacles);
+      add_polygons_markers(polygons, markers_enum::obstacles);
     }
 
-    void add_obstacles_markers(
-      const std::vector<geometry_msgs::msg::Polygon> obstacles, markers_enum type){
+    void add_polygons_markers(
+      const std::vector<geometry_msgs::msg::Polygon> polygons, markers_enum type){
       
       auto tp = [](const geometry_msgs::msg::Point32 p){
         geometry_msgs::msg::Point a;
@@ -582,8 +583,8 @@ class RoadmapManager : public rclcpp::Node
       marker.color.g = 0.1;
       marker.color.b = 0.1;
 
-      for(auto obs:obstacles){
-        auto segments = extract_segment(obs);
+      for(auto pol:polygons){
+        auto segments = extract_segment(pol);
         for(auto seg:segments){
           marker.points.push_back(seg.first);
           marker.points.push_back(seg.second);
@@ -591,7 +592,6 @@ class RoadmapManager : public rclcpp::Node
       }
 
       markers.markers[type] = marker;
-      log("Updated obstacles markers at "+std::to_string(type));
     }
 
     void add_width_markers(Graph& graph){
