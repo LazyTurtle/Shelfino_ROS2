@@ -4,6 +4,7 @@
 #include <string>
 
 #include "rclcpp/rclcpp.hpp"
+#include "rclcpp/wait_for_message.hpp"
 #include "std_srvs/srv/empty.hpp"
 #include "geometry_msgs/msg/pose_array.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
@@ -47,6 +48,7 @@ class RobotDriver : public rclcpp::Node
     rclcpp::Service<std_srvs::srv::Empty>::SharedPtr test_service;
 
     const double ROBOT_WIDTH = 0.5;
+    const int N_ROBOTS = 3;
 
     const std::chrono::milliseconds publishers_period = 1000ms;
     rclcpp::TimerBase::SharedPtr timer;
@@ -115,7 +117,7 @@ class RobotDriver : public rclcpp::Node
 
       auto length_of_path = [](const nav_msgs::msg::Path& path){
         double length = 0.0;
-        for(int i=1; i<path.poses.size(); i++){
+        for(std::size_t i=1; i<path.poses.size(); i++){
           double dx = path.poses[i].pose.position.x - path.poses[i-1].pose.position.x;
           double dy = path.poses[i].pose.position.y - path.poses[i-1].pose.position.y;
           double dz = path.poses[i].pose.position.z - path.poses[i-1].pose.position.z;
@@ -185,7 +187,32 @@ class RobotDriver : public rclcpp::Node
 
     }
 
+    std::vector<geometry_msgs::msg::Polygon> obstacles_from_robots(){
+      std::vector<geometry_msgs::msg::Polygon> obstacles;
+      std::vector<geometry_msgs::msg::TransformStamped> transforms = get_robot_transforms();
+      for(auto robot_tr:transforms){
+        geometry_msgs::msg::Polygon obs = extract_obstacle(robot_tr, ROBOT_WIDTH);
+        obstacles.push_back(obs);
+      }
+      return obstacles;
+    }
     
+    std::vector<geometry_msgs::msg::TransformStamped> get_robot_transforms(){
+      auto transform_node = rclcpp::Node::make_shared("transform_client");
+      std::vector<geometry_msgs::msg::TransformStamped> transforms;
+      for(int i = 0; i<N_ROBOTS; i++){
+        if(i == robot_id)
+          continue;
+        geometry_msgs::msg::TransformStamped t;
+        bool obtained = rclcpp::wait_for_message(t, transform_node, "/shelfino"+std::to_string(i)+"/trasnform", 1s);
+        if(obtained){
+          transforms.push_back(t);
+          log("found transform for shelfino"+std::to_string(i));
+        }
+      }
+      log("Found "+std::to_string(transforms.size()+" transforms."));
+      return transforms;
+    }
 
 };
 

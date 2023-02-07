@@ -1,6 +1,7 @@
 geometry_msgs/Point32 start
 geometry_msgs/Point32 end
 float64 minimum_path_width 0.0
+geometry_msgs/Polygon[] obstacles
 ---
 bool result false
 nav_msgs/Path path
