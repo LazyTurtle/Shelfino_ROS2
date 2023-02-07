@@ -5,6 +5,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp/wait_for_message.hpp"
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include "std_srvs/srv/empty.hpp"
 #include "geometry_msgs/msg/pose_array.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
@@ -210,9 +211,35 @@ class RobotDriver : public rclcpp::Node
           log("found transform for shelfino"+std::to_string(i));
         }
       }
-      log("Found "+std::to_string(transforms.size()+" transforms."));
+      log("Found "+std::to_string(transforms.size())+" transforms.");
       return transforms;
     }
+
+    geometry_msgs::msg::Polygon extract_obstacle(
+      const geometry_msgs::msg::TransformStamped transform, const double robot_width){
+        geometry_msgs::msg::Polygon p;
+        double h = (robot_width/2.0);
+        const double x = transform.transform.translation.x;
+        const double y = transform.transform.translation.y;
+        tf2::Quaternion q;
+        tf2::fromMsg(transform.transform.rotation, q);
+        tf2::Matrix3x3 m(q);
+        double roll, pitch, yaw;
+        m.getEulerYPR(roll, pitch, yaw);
+        std::vector<geometry_msgs::msg::Point32> points(4);
+        points[0].x = h*std::cos(yaw) - h*std::sin(yaw) +x;
+        points[0].y = h*std::sin(yaw) + h*std::cos(yaw) +y;
+        points[1].x = -h*std::cos(yaw) - h*std::sin(yaw) +x;
+        points[1].y = -h*std::sin(yaw) + h*std::cos(yaw) +y;
+        points[2].x = -h*std::cos(yaw) - (-h)*std::sin(yaw) +x;
+        points[2].y = -h*std::sin(yaw) + (-h)*std::cos(yaw) +y;
+        points[3].x = h*std::cos(yaw) - (-h)*std::sin(yaw) +x;
+        points[3].y = h*std::sin(yaw) + (-h)*std::cos(yaw) +y;
+        
+        p.points = points;
+        
+        return p;
+      }
 
 };
 

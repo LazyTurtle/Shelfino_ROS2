@@ -17,7 +17,7 @@ find_package(roadmap_interfaces REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(dubins_planner REQUIRED)
 find_package(dubins_planner_msgs REQUIRED)
-
+find_package(tf2_geometry_msgs REQUIRED)
 
 include_directories(include)
 
@@ -41,6 +41,7 @@ ament_target_dependencies(driver
   geometry_msgs
   roadmap_interfaces
   std_srvs
+  tf2_geometry_msgs
 )
 
 target_include_directories(manager PUBLIC
