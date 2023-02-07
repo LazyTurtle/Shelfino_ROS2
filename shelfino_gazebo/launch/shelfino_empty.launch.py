@@ -78,14 +78,6 @@ def generate_launch_description():
             condition=IfCondition(rviz),
             remappings=remappings
         ),
-        Node(
-            package="tf2_ros",
-            executable="static_transform_publisher",
-            output="screen" ,
-            namespace=ns,
-            remappings=remappings,
-            arguments=["0", "0", "0", "0", "0", "0", "map", "odom"]
-        ),
 
         Node(
             package='get_positions',

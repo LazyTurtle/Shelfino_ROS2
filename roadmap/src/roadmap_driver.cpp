@@ -132,6 +132,7 @@ class RobotDriver : public rclcpp::Node
       auto client = client_node->create_client<roadmap_interfaces::srv::PathService>(ROADMAP_SERVICE_NAME);
       
       std::vector<nav_msgs::msg::Path> possible_paths;
+      auto obstacles = obstacles_from_robots();
 
       for(auto gate:gates->poses){
         {
@@ -152,6 +153,8 @@ class RobotDriver : public rclcpp::Node
 
         // actually, half width plus a small tollerance
         req->minimum_path_width = (ROBOT_WIDTH / 2.0) + 0.1;
+
+        req->obstacles = obstacles;
 
         while (!client->wait_for_service(1s)){
           if (!rclcpp::ok()){
@@ -192,20 +195,29 @@ class RobotDriver : public rclcpp::Node
       std::vector<geometry_msgs::msg::Polygon> obstacles;
       std::vector<geometry_msgs::msg::TransformStamped> transforms = get_robot_transforms();
       for(auto robot_tr:transforms){
-        geometry_msgs::msg::Polygon obs = extract_obstacle(robot_tr, ROBOT_WIDTH);
+        geometry_msgs::msg::Polygon obs = create_square(robot_tr, ROBOT_WIDTH);
         obstacles.push_back(obs);
       }
       return obstacles;
     }
     
     std::vector<geometry_msgs::msg::TransformStamped> get_robot_transforms(){
-      auto transform_node = rclcpp::Node::make_shared("transform_client");
+      auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
+      
       std::vector<geometry_msgs::msg::TransformStamped> transforms;
-      for(int i = 0; i<N_ROBOTS; i++){
+      for(int i = 0; i<N_ROBOTS+1; i++){
         if(i == robot_id)
           continue;
         geometry_msgs::msg::TransformStamped t;
-        bool obtained = rclcpp::wait_for_message(t, transform_node, "/shelfino"+std::to_string(i)+"/trasnform", 1s);
+        std::string topic_name = "/shelfino"+std::to_string(i)+"/transform";
+        log("Looking for topic:"+topic_name);
+
+        // this is necessary if we want to use qos
+        std::shared_ptr<rclcpp::Subscription<geometry_msgs::msg::TransformStamped>>
+         sub = this->create_subscription<geometry_msgs::msg::TransformStamped>
+          (topic_name,qos,[](const std::shared_ptr<const geometry_msgs::msg::TransformStamped>){});
+
+        bool obtained = rclcpp::wait_for_message(t,sub, this->get_node_options().context(), 1s);
         if(obtained){
           transforms.push_back(t);
           log("found transform for shelfino"+std::to_string(i));
@@ -215,7 +227,7 @@ class RobotDriver : public rclcpp::Node
       return transforms;
     }
 
-    geometry_msgs::msg::Polygon extract_obstacle(
+    geometry_msgs::msg::Polygon create_square(
       const geometry_msgs::msg::TransformStamped transform, const double robot_width){
         geometry_msgs::msg::Polygon p;
         double h = (robot_width/2.0);
@@ -237,6 +249,12 @@ class RobotDriver : public rclcpp::Node
         points[3].y = h*std::sin(yaw) + (-h)*std::cos(yaw) +y;
         
         p.points = points;
+
+        for(auto po:points){
+          std::ostringstream s;
+          s<<"x:"<<po.x<<" y:"<<po.y;
+          log(s.str());
+        }
         
         return p;
       }

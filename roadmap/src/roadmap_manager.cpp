@@ -254,7 +254,7 @@ class RoadmapManager : public rclcpp::Node
 
     visualization_msgs::msg::MarkerArray markers;
     enum markers_enum {voronoi, waypoints, obstacles, other_robots};
-    int MARKERS_NUM = 3;
+    int MARKERS_NUM = 4;
 
     visualization_msgs::msg::MarkerArray width_text;
 
@@ -326,7 +326,8 @@ class RoadmapManager : public rclcpp::Node
       std::shared_ptr<roadmap_interfaces::srv::PathService_Response> response){
       
       log("Start calculating a new path.");
-      if(!update_voronoi_diagram()){
+      std::vector<geometry_msgs::msg::Polygon> obsts = request->obstacles;
+      if(!update_voronoi_diagram(obsts)){
         err("Cannot update the voronoi diagram");
       }
       
@@ -405,7 +406,7 @@ class RoadmapManager : public rclcpp::Node
       }
     }
 
-    bool update_voronoi_diagram(){
+    bool update_voronoi_diagram(std::vector<geometry_msgs::msg::Polygon> temp_obstacles){
 
       if(!borders_msg || !obstacles_msg){
         log("Pointers not ready.");
@@ -416,11 +417,21 @@ class RoadmapManager : public rclcpp::Node
       segments_data.clear();
       points_data.clear();
 
+      // REMEMBER THAT POLYGONS MUST NOT
+      // NOT
+      // INTERSECT ONE ANOTHER!
+
       add_polygon_to_boost_segments(borders_msg->polygon, segments_data);
 
       std::vector<obstacles_msgs::msg::ObstacleMsg> obstacles = obstacles_msg->obstacles;
       for(auto& obs:obstacles){
         add_polygon_to_boost_segments(obs.polygon, segments_data);
+      }
+
+      add_polygons_markers(temp_obstacles, markers_enum::other_robots);
+      for(auto& obs:temp_obstacles){
+        
+        add_polygon_to_boost_segments(obs, segments_data);
       }
 
       vd.clear();
@@ -440,18 +451,13 @@ class RoadmapManager : public rclcpp::Node
 
     void add_polygon_to_boost_segments(
       const geometry_msgs::msg::Polygon& poly, std::vector<BoostSegment>& segments){
-
-      for(std::size_t i = 0; i<poly.points.size()-1; i++){
+      
+      for(std::size_t i = 0; i<poly.points.size(); i++){
         BoostPoint a = g2b_p(poly.points[i], scale);
-        BoostPoint b = g2b_p(poly.points[i+1], scale);
+        BoostPoint b = g2b_p(poly.points[(i+1)%poly.points.size()], scale);
         BoostSegment segment(a, b);
         segments.push_back(segment);
       }
-      BoostPoint a = g2b_p(poly.points.back(), scale);
-      BoostPoint b = g2b_p(poly.points[0], scale);
-      BoostSegment segment(a, b);
-
-      segments.push_back(segment);
     }
 
     // geometry to boost, point
