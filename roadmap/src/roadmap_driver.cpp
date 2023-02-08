@@ -237,7 +237,7 @@ class RobotDriver : public rclcpp::Node
         tf2::fromMsg(transform.transform.rotation, q);
         tf2::Matrix3x3 m(q);
         double roll, pitch, yaw;
-        m.getEulerYPR(roll, pitch, yaw);
+        m.getEulerYPR(yaw, pitch, roll);
         std::vector<geometry_msgs::msg::Point32> points(4);
         points[0].x = h*std::cos(yaw) - h*std::sin(yaw) +x;
         points[0].y = h*std::sin(yaw) + h*std::cos(yaw) +y;

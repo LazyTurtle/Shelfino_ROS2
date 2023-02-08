@@ -429,8 +429,7 @@ class RoadmapManager : public rclcpp::Node
       }
 
       add_polygons_markers(temp_obstacles, markers_enum::other_robots);
-      for(auto& obs:temp_obstacles){
-        
+      for(auto& obs:temp_obstacles){ 
         add_polygon_to_boost_segments(obs, segments_data);
       }
 

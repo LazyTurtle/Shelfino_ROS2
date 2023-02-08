@@ -26,7 +26,6 @@ def generate_launch_description():
         Node(
             package='dubins_calculator',
             executable='dubins_calculator',
-            #output='screen',
         ),
         Node(
             package='roadmap',
