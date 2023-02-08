@@ -611,9 +611,9 @@ class RoadmapManager : public rclcpp::Node
           id++;
           marker.action = visualization_msgs::msg::Marker::ADD;
           marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
-          marker.scale.x = 0.2;
-          marker.scale.y = 0.2;
-          marker.scale.z = 0.2;
+          marker.scale.x = 0.1;
+          marker.scale.y = 0.1;
+          marker.scale.z = 0.1;
           marker.color.a = 1.0;
           marker.color.r = 1;
           marker.color.g = 1;
