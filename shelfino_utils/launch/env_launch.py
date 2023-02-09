@@ -3,7 +3,6 @@ from launch_ros.actions import Node
 import os
 from ament_index_python.packages import get_package_share_directory
 remappings = [('/tf', 'tf'), ('/tf_static', 'tf_static')]
-ns = "shelfino1"
 
 def generate_launch_description():
     my_package_dir = get_package_share_directory("shelfino_utils")

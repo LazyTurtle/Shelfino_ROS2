@@ -4,12 +4,14 @@
 #include <string>
 
 #include "rclcpp/rclcpp.hpp"
+#include "rclcpp_action/rclcpp_action.hpp"
 #include "rclcpp/wait_for_message.hpp"
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include "std_srvs/srv/empty.hpp"
 #include "geometry_msgs/msg/pose_array.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "nav_msgs/msg/path.hpp"
+#include "nav2_msgs/action/follow_path.hpp"
 #include "roadmap_interfaces/srv/path_service.hpp"
 
 using std::placeholders::_1;
@@ -20,6 +22,10 @@ using namespace std::chrono_literals;
 class RobotDriver : public rclcpp::Node
 {
   public:
+    std::shared_ptr<nav_msgs::msg::Path> path;
+    double path_length;
+
+
     RobotDriver()
     : Node("robot_driver"){}
 
@@ -33,7 +39,7 @@ class RobotDriver : public rclcpp::Node
         ROBOT_POSITION_TOPIC, qos, std::bind(&RobotDriver::set_robot_position, this, _1));
 
       test_service = this->create_service<std_srvs::srv::Empty>(
-        "test_drive", std::bind(&RobotDriver::test, this, _1, _2));
+        "test_drive", std::bind(&RobotDriver::find_best_path, this, _1, _2));
 
 
       path_publisher = this->create_publisher<nav_msgs::msg::Path>(PATH_TOPIC, qos);
@@ -69,7 +75,6 @@ class RobotDriver : public rclcpp::Node
 
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher;
 
-    std::shared_ptr<nav_msgs::msg::Path> path;
 
     void log(std::string log){
       RCLCPP_INFO(this->get_logger(), log.c_str());
@@ -99,10 +104,26 @@ class RobotDriver : public rclcpp::Node
         path_publisher->publish(*path);
     }
 
-    void test(
+    void find_best_path(
       const std::shared_ptr<std_srvs::srv::Empty_Request> request,
       std::shared_ptr<std_srvs::srv::Empty_Response> response){
       get_path();
+      follow_path();
+    }
+
+    void follow_path(){
+
+      rclcpp_action::Client<nav2_msgs::action::FollowPath>::SharedPtr client_ptr;
+      client_ptr = rclcpp_action::create_client<nav2_msgs::action::FollowPath>(this,"follow_path");
+      if (!client_ptr->wait_for_action_server()) {
+      err("Action server not available after waiting");
+      rclcpp::shutdown();
+      }
+      auto goal_msg = nav2_msgs::action::FollowPath::Goal();
+      goal_msg.path = *path;
+      goal_msg.controller_id = "FollowPath";
+      RCLCPP_INFO(this->get_logger(), "Sending goal");
+      client_ptr->async_send_goal(goal_msg);
     }
 
     void get_path(){
@@ -187,6 +208,7 @@ class RobotDriver : public rclcpp::Node
       int min_index = std::distance(lengths.begin(), min_itr);
 
       path = std::make_shared<nav_msgs::msg::Path>(possible_paths[min_index]);
+      path_length = lengths[min_index];
       log("Shortest path obtained.");
 
     }
