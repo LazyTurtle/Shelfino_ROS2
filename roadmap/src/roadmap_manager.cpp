@@ -221,7 +221,7 @@ class RoadmapManager : public rclcpp::Node
 
   private:
 
-    const double MAXIMUM_CURVATURE = 4.0;
+    const double MAXIMUM_CURVATURE = 3.0;
     const int DISCRETIZATION_DELTA = 4;
     const int REFINEMENTS = 3;
     const double MINIMUM_WAYPOINT_DISTANCE = 0.5;
@@ -308,6 +308,7 @@ class RoadmapManager : public rclcpp::Node
 
     void set_obstacles(const obstacles_msgs::msg::ObstacleArrayMsg::SharedPtr msg){
       obstacles_msg = msg;
+      // TODO: we could check to only remake the markers if there are new values
       add_obstacles_markers();
     }
 
@@ -325,7 +326,8 @@ class RoadmapManager : public rclcpp::Node
       std::shared_ptr<roadmap_interfaces::srv::PathService_Response> response){
       
       log("Start calculating a new path.");
-      if(!update_voronoi_diagram()){
+      std::vector<geometry_msgs::msg::Polygon> obsts = request->obstacles;
+      if(!update_voronoi_diagram(obsts)){
         err("Cannot update the voronoi diagram");
       }
       
@@ -404,7 +406,7 @@ class RoadmapManager : public rclcpp::Node
       }
     }
 
-    bool update_voronoi_diagram(){
+    bool update_voronoi_diagram(std::vector<geometry_msgs::msg::Polygon> temp_obstacles){
 
       if(!borders_msg || !obstacles_msg){
         log("Pointers not ready.");
@@ -415,11 +417,20 @@ class RoadmapManager : public rclcpp::Node
       segments_data.clear();
       points_data.clear();
 
+      // REMEMBER THAT POLYGONS MUST NOT
+      // NOT
+      // INTERSECT ONE ANOTHER!
+
       add_polygon_to_boost_segments(borders_msg->polygon, segments_data);
 
       std::vector<obstacles_msgs::msg::ObstacleMsg> obstacles = obstacles_msg->obstacles;
       for(auto& obs:obstacles){
         add_polygon_to_boost_segments(obs.polygon, segments_data);
+      }
+
+      add_polygons_markers(temp_obstacles, markers_enum::other_robots);
+      for(auto& obs:temp_obstacles){ 
+        add_polygon_to_boost_segments(obs, segments_data);
       }
 
       vd.clear();
@@ -439,18 +450,13 @@ class RoadmapManager : public rclcpp::Node
 
     void add_polygon_to_boost_segments(
       const geometry_msgs::msg::Polygon& poly, std::vector<BoostSegment>& segments){
-
-      for(std::size_t i = 0; i<poly.points.size()-1; i++){
+      
+      for(std::size_t i = 0; i<poly.points.size(); i++){
         BoostPoint a = g2b_p(poly.points[i], scale);
-        BoostPoint b = g2b_p(poly.points[i+1], scale);
+        BoostPoint b = g2b_p(poly.points[(i+1)%poly.points.size()], scale);
         BoostSegment segment(a, b);
         segments.push_back(segment);
       }
-      BoostPoint a = g2b_p(poly.points.back(), scale);
-      BoostPoint b = g2b_p(poly.points[0], scale);
-      BoostSegment segment(a, b);
-
-      segments.push_back(segment);
     }
 
     // geometry to boost, point
@@ -545,11 +551,11 @@ class RoadmapManager : public rclcpp::Node
       for(auto obs:obstacles_msg->obstacles){
         polygons.push_back(obs.polygon);
       }
-      add_obstacles_markers(polygons, markers_enum::obstacles);
+      add_polygons_markers(polygons, markers_enum::obstacles);
     }
 
-    void add_obstacles_markers(
-      const std::vector<geometry_msgs::msg::Polygon> obstacles, markers_enum type){
+    void add_polygons_markers(
+      const std::vector<geometry_msgs::msg::Polygon> polygons, markers_enum type){
       
       auto tp = [](const geometry_msgs::msg::Point32 p){
         geometry_msgs::msg::Point a;
@@ -582,8 +588,8 @@ class RoadmapManager : public rclcpp::Node
       marker.color.g = 0.1;
       marker.color.b = 0.1;
 
-      for(auto obs:obstacles){
-        auto segments = extract_segment(obs);
+      for(auto pol:polygons){
+        auto segments = extract_segment(pol);
         for(auto seg:segments){
           marker.points.push_back(seg.first);
           marker.points.push_back(seg.second);
@@ -591,7 +597,6 @@ class RoadmapManager : public rclcpp::Node
       }
 
       markers.markers[type] = marker;
-      log("Updated obstacles markers at "+std::to_string(type));
     }
 
     void add_width_markers(Graph& graph){
@@ -606,9 +611,9 @@ class RoadmapManager : public rclcpp::Node
           id++;
           marker.action = visualization_msgs::msg::Marker::ADD;
           marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
-          marker.scale.x = 0.2;
-          marker.scale.y = 0.2;
-          marker.scale.z = 0.2;
+          marker.scale.x = 0.1;
+          marker.scale.y = 0.1;
+          marker.scale.z = 0.1;
           marker.color.a = 1.0;
           marker.color.r = 1;
           marker.color.g = 1;

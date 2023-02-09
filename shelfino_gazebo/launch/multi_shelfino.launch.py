@@ -63,8 +63,9 @@ def generate_launch_description():
             arguments=['-file', LaunchConfiguration('model'),
                        '-entity', 'shelfino1',
                        '-robot_namespace', 'shelfino1',
-                       '-x', '0',
-                       '-y', '1']
+                       '-x', '4',
+                       '-y', '1',
+                       '-Y', '1']
         ),
 
         Node(
@@ -73,8 +74,9 @@ def generate_launch_description():
             arguments=['-file', LaunchConfiguration('model'),
                        '-entity', 'shelfino2',
                        '-robot_namespace', 'shelfino2',
-                       '-x', '0',
-                       '-y', '0']
+                       '-x', '1',
+                       '-y', '-1',
+                       '-Y', '0.7']
         ),
 
         Node(
@@ -83,8 +85,9 @@ def generate_launch_description():
             arguments=['-file', LaunchConfiguration('model'),
                        '-entity', 'shelfino3',
                        '-robot_namespace', 'shelfino3',
-                       '-x', '0',
-                       '-y', '-1']
+                       '-x', '4.5',
+                       '-y', '-4',
+                       '-Y', '1.8']
         ),
 
         IncludeLaunchDescription(
@@ -105,57 +108,77 @@ def generate_launch_description():
                               'robot_id': 'shelfino3'}.items()
         ),
 
-        Node(
-            package='rviz2',
-            executable='rviz2',
-            namespace='shelfino1',
-            arguments=['-d', rviz_config1],
-            condition=IfCondition(rviz),
-            remappings=remappings
-        ),
+        # Node(
+        #     package='rviz2',
+        #     executable='rviz2',
+        #     namespace='shelfino1',
+        #     arguments=['-d', rviz_config1],
+        #     condition=IfCondition(rviz),
+        #     remappings=remappings
+        # ),
 
-        Node(
-            package='rviz2',
-            executable='rviz2',
-            namespace='shelfino2',
-            arguments=['-d', rviz_config1],
-            condition=IfCondition(rviz),
-            remappings=remappings
-        ),
+        # Node(
+        #     package='rviz2',
+        #     executable='rviz2',
+        #     namespace='shelfino2',
+        #     arguments=['-d', rviz_config1],
+        #     condition=IfCondition(rviz),
+        #     remappings=remappings
+        # ),
 
-        Node(
-            package='rviz2',
-            executable='rviz2',
-            namespace='shelfino3',
-            arguments=['-d', rviz_config1],
-            condition=IfCondition(rviz),
-            remappings=remappings
-        ),
+        # Node(
+        #     package='rviz2',
+        #     executable='rviz2',
+        #     namespace='shelfino3',
+        #     arguments=['-d', rviz_config1],
+        #     condition=IfCondition(rviz),
+        #     remappings=remappings
+        # ),
 
         Node(
             package='get_positions',
             executable='get_positions',
             namespace='shelfino1',
-            remappings=[
-            ('/tf', 'tf')],
+            remappings=remappings,
             ),
 
         Node(
             package='get_positions',
             executable='get_positions',
             namespace='shelfino2',
-            remappings=[
-            ('/tf', 'tf')],
+            remappings=remappings,
             ),
 
         Node(
             package='get_positions',
             executable='get_positions',
             namespace='shelfino3',
-            remappings=[
-            ('/tf', 'tf')],
+            remappings=remappings,
             ),
-
+        Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            output="screen" ,
+            namespace="shelfino1",
+            remappings=remappings,
+            arguments=["0", "0", "0", "0", "0", "0", "map", "odom"]
+        ),
+        Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            output="screen" ,
+            namespace="shelfino2",
+            remappings=remappings,
+            arguments=["0", "0", "0", "0", "0", "0", "map", "odom"]
+        ),
+        Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            output="screen" ,
+            namespace="shelfino3",
+            remappings=remappings,
+            arguments=["0", "0", "0", "0", "0", "0", "map", "odom"]
+        ),
         Node(
             package='send_obstacles',
             executable='send_obstacles'

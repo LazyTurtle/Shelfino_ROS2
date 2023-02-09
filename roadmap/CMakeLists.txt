@@ -11,13 +11,15 @@ find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(nav2_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(obstacles_msgs REQUIRED)
 find_package(roadmap_interfaces REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(dubins_planner REQUIRED)
 find_package(dubins_planner_msgs REQUIRED)
-
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(rclcpp_action REQUIRED)
 
 include_directories(include)
 
@@ -41,6 +43,10 @@ ament_target_dependencies(driver
   geometry_msgs
   roadmap_interfaces
   std_srvs
+  tf2_geometry_msgs
+  nav_msgs
+  nav2_msgs
+  rclcpp_action
 )
 
 target_include_directories(manager PUBLIC

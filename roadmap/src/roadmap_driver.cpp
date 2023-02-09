@@ -4,10 +4,14 @@
 #include <string>
 
 #include "rclcpp/rclcpp.hpp"
+#include "rclcpp_action/rclcpp_action.hpp"
+#include "rclcpp/wait_for_message.hpp"
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include "std_srvs/srv/empty.hpp"
 #include "geometry_msgs/msg/pose_array.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "nav_msgs/msg/path.hpp"
+#include "nav2_msgs/action/follow_path.hpp"
 #include "roadmap_interfaces/srv/path_service.hpp"
 
 using std::placeholders::_1;
@@ -18,6 +22,10 @@ using namespace std::chrono_literals;
 class RobotDriver : public rclcpp::Node
 {
   public:
+    std::shared_ptr<nav_msgs::msg::Path> path;
+    double path_length;
+
+
     RobotDriver()
     : Node("robot_driver"){}
 
@@ -31,14 +39,15 @@ class RobotDriver : public rclcpp::Node
         ROBOT_POSITION_TOPIC, qos, std::bind(&RobotDriver::set_robot_position, this, _1));
 
       test_service = this->create_service<std_srvs::srv::Empty>(
-        "test_drive", std::bind(&RobotDriver::test, this, _1, _2));
+        "test_drive", std::bind(&RobotDriver::find_best_path, this, _1, _2));
 
 
       path_publisher = this->create_publisher<nav_msgs::msg::Path>(PATH_TOPIC, qos);
 
       timer = this->create_wall_timer(publishers_period, std::bind(&RobotDriver::publish, this));
       
-      log("Ready.");
+      robot_id = get_robot_id();
+      log("Driver "+std::to_string(robot_id)+" ready.");
     }
 
   private:
@@ -46,6 +55,7 @@ class RobotDriver : public rclcpp::Node
     rclcpp::Service<std_srvs::srv::Empty>::SharedPtr test_service;
 
     const double ROBOT_WIDTH = 0.5;
+    const int N_ROBOTS = 3;
 
     const std::chrono::milliseconds publishers_period = 1000ms;
     rclcpp::TimerBase::SharedPtr timer;
@@ -55,6 +65,7 @@ class RobotDriver : public rclcpp::Node
     const std::string ROBOT_POSITION_TOPIC = "transform";
     const std::string PATH_TOPIC = "shortest_path";
 
+    int robot_id;
     
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr gates_subscriber;
     rclcpp::Subscription<geometry_msgs::msg::TransformStamped>::SharedPtr robot_position_subscriber;
@@ -64,7 +75,6 @@ class RobotDriver : public rclcpp::Node
 
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher;
 
-    std::shared_ptr<nav_msgs::msg::Path> path;
 
     void log(std::string log){
       RCLCPP_INFO(this->get_logger(), log.c_str());
@@ -82,16 +92,87 @@ class RobotDriver : public rclcpp::Node
       robot_position = msg;
     }
 
+    int get_robot_id(){
+      std::string ns = this->get_namespace();
+      std::string s(1,ns.back());
+      int id = std::stoi(s);
+      return id;
+    }
+
     void publish(){
       if(path)
         path_publisher->publish(*path);
     }
 
-    void test(
+    void find_best_path(
       const std::shared_ptr<std_srvs::srv::Empty_Request> request,
       std::shared_ptr<std_srvs::srv::Empty_Response> response){
+      log("Request test_drive");
       get_path();
+      follow_path();
     }
+
+    void follow_path(){
+
+      rclcpp_action::Client<nav2_msgs::action::FollowPath>::SharedPtr client_ptr;
+      client_ptr = rclcpp_action::create_client<nav2_msgs::action::FollowPath>(this,"follow_path");
+      if (!client_ptr->wait_for_action_server()) {
+        err("Action server not available after waiting");
+        return;
+      }
+      auto send_goal_options = rclcpp_action::Client<nav2_msgs::action::FollowPath>::SendGoalOptions();
+      send_goal_options.goal_response_callback = 
+        std::bind(&RobotDriver::goal_response_callback, this, _1);
+      send_goal_options.feedback_callback =
+        std::bind(&RobotDriver::feedback_callback, this, _1, _2);
+      send_goal_options.result_callback = 
+        std::bind(&RobotDriver::result_callback, this, _1);
+
+      auto goal_msg = nav2_msgs::action::FollowPath::Goal();
+      goal_msg.path = *path;
+      goal_msg.controller_id = "FollowPath";
+      log("Sending goal");
+      client_ptr->async_send_goal(goal_msg, send_goal_options);
+      log("Goal sent.");
+    }
+
+    void goal_response_callback(rclcpp_action::ClientGoalHandle<nav2_msgs::action::FollowPath>::SharedPtr future){
+      auto goal_handle = future.get();
+      if (!goal_handle) {
+        err("Goal was rejected by server");
+      } else {
+        log("Goal accepted by server, waiting for result");
+      }
+    }
+      
+    void feedback_callback(
+      rclcpp_action::ClientGoalHandle<nav2_msgs::action::FollowPath>::SharedPtr,
+      const std::shared_ptr<const nav2_msgs::action::FollowPath::Feedback> feedback){
+      std::stringstream ss;
+      ss << "Distance to goal: ";
+      auto p = feedback->distance_to_goal;
+      ss<<p;
+      log(ss.str());
+    }
+    
+    void result_callback(const rclcpp_action::ClientGoalHandle<nav2_msgs::action::FollowPath>::WrappedResult & result){
+      switch (result.code) {
+        case rclcpp_action::ResultCode::SUCCEEDED:
+          break;
+        case rclcpp_action::ResultCode::ABORTED:
+          RCLCPP_ERROR(this->get_logger(), "Goal was aborted");
+          return;
+        case rclcpp_action::ResultCode::CANCELED:
+          RCLCPP_ERROR(this->get_logger(), "Goal was canceled");
+          return;
+        default:
+          RCLCPP_ERROR(this->get_logger(), "Unknown result code");
+          return;
+      }
+      log("result received.");
+      rclcpp::shutdown();
+    }
+    
 
     void get_path(){
       
@@ -106,7 +187,7 @@ class RobotDriver : public rclcpp::Node
 
       auto length_of_path = [](const nav_msgs::msg::Path& path){
         double length = 0.0;
-        for(int i=1; i<path.poses.size(); i++){
+        for(std::size_t i=1; i<path.poses.size(); i++){
           double dx = path.poses[i].pose.position.x - path.poses[i-1].pose.position.x;
           double dy = path.poses[i].pose.position.y - path.poses[i-1].pose.position.y;
           double dz = path.poses[i].pose.position.z - path.poses[i-1].pose.position.z;
@@ -120,6 +201,7 @@ class RobotDriver : public rclcpp::Node
       auto client = client_node->create_client<roadmap_interfaces::srv::PathService>(ROADMAP_SERVICE_NAME);
       
       std::vector<nav_msgs::msg::Path> possible_paths;
+      auto obstacles = obstacles_from_robots();
 
       for(auto gate:gates->poses){
         {
@@ -140,6 +222,8 @@ class RobotDriver : public rclcpp::Node
 
         // actually, half width plus a small tollerance
         req->minimum_path_width = (ROBOT_WIDTH / 2.0) + 0.1;
+
+        req->obstacles = obstacles;
 
         while (!client->wait_for_service(1s)){
           if (!rclcpp::ok()){
@@ -172,11 +256,78 @@ class RobotDriver : public rclcpp::Node
       int min_index = std::distance(lengths.begin(), min_itr);
 
       path = std::make_shared<nav_msgs::msg::Path>(possible_paths[min_index]);
+      path_length = lengths[min_index];
       log("Shortest path obtained.");
 
     }
 
+    std::vector<geometry_msgs::msg::Polygon> obstacles_from_robots(){
+      std::vector<geometry_msgs::msg::Polygon> obstacles;
+      std::vector<geometry_msgs::msg::TransformStamped> transforms = get_robot_transforms();
+      for(auto robot_tr:transforms){
+        geometry_msgs::msg::Polygon obs = create_square(robot_tr, ROBOT_WIDTH);
+        obstacles.push_back(obs);
+      }
+      return obstacles;
+    }
     
+    std::vector<geometry_msgs::msg::TransformStamped> get_robot_transforms(){
+      auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
+      
+      std::vector<geometry_msgs::msg::TransformStamped> transforms;
+      for(int i = 0; i<N_ROBOTS+1; i++){
+        if(i == robot_id)
+          continue;
+        geometry_msgs::msg::TransformStamped t;
+        std::string topic_name = "/shelfino"+std::to_string(i)+"/transform";
+        log("Looking for topic:"+topic_name);
+
+        // this is necessary if we want to use qos
+        std::shared_ptr<rclcpp::Subscription<geometry_msgs::msg::TransformStamped>>
+         sub = this->create_subscription<geometry_msgs::msg::TransformStamped>
+          (topic_name,qos,[](const std::shared_ptr<const geometry_msgs::msg::TransformStamped>){});
+
+        bool obtained = rclcpp::wait_for_message(t,sub, this->get_node_options().context(), 1s);
+        if(obtained){
+          transforms.push_back(t);
+          log("found transform for shelfino"+std::to_string(i));
+        }
+      }
+      log("Found "+std::to_string(transforms.size())+" transforms.");
+      return transforms;
+    }
+
+    geometry_msgs::msg::Polygon create_square(
+      const geometry_msgs::msg::TransformStamped transform, const double robot_width){
+        geometry_msgs::msg::Polygon p;
+        double h = (robot_width/2.0);
+        const double x = transform.transform.translation.x;
+        const double y = transform.transform.translation.y;
+        tf2::Quaternion q;
+        tf2::fromMsg(transform.transform.rotation, q);
+        tf2::Matrix3x3 m(q);
+        double roll, pitch, yaw;
+        m.getEulerYPR(yaw, pitch, roll);
+        std::vector<geometry_msgs::msg::Point32> points(4);
+        points[0].x = h*std::cos(yaw) - h*std::sin(yaw) +x;
+        points[0].y = h*std::sin(yaw) + h*std::cos(yaw) +y;
+        points[1].x = -h*std::cos(yaw) - h*std::sin(yaw) +x;
+        points[1].y = -h*std::sin(yaw) + h*std::cos(yaw) +y;
+        points[2].x = -h*std::cos(yaw) - (-h)*std::sin(yaw) +x;
+        points[2].y = -h*std::sin(yaw) + (-h)*std::cos(yaw) +y;
+        points[3].x = h*std::cos(yaw) - (-h)*std::sin(yaw) +x;
+        points[3].y = h*std::sin(yaw) + (-h)*std::cos(yaw) +y;
+        
+        p.points = points;
+
+        for(auto po:points){
+          std::ostringstream s;
+          s<<"x:"<<po.x<<" y:"<<po.y;
+          log(s.str());
+        }
+        
+        return p;
+      }
 
 };
 
