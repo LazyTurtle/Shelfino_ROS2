@@ -63,8 +63,9 @@ def generate_launch_description():
             arguments=['-file', LaunchConfiguration('model'),
                        '-entity', 'shelfino1',
                        '-robot_namespace', 'shelfino1',
-                       '-x', '-1',
-                       '-y', '1']
+                       '-x', '4',
+                       '-y', '1',
+                       '-Y', '1']
         ),
 
         Node(

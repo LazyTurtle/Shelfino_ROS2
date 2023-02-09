@@ -29,13 +29,10 @@ def generate_launch_description():
             package='dubins_calculator',
             executable='dubins_calculator',
         ),
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([
-                FindPackageShare("shelfino_utils"), '/launch', '/shelfino1_launch.py'])),
-        # IncludeLaunchDescription(
-        #     PythonLaunchDescriptionSource([
-        #         FindPackageShare("shelfino_utils"), '/launch', '/shelfino2_launch.py'])),
-        # IncludeLaunchDescription(
-        #     PythonLaunchDescriptionSource([
-        #         FindPackageShare("shelfino_utils"), '/launch', '/shelfino3_launch.py'])),
+        IncludeLaunchDescription(PythonLaunchDescriptionSource([FindPackageShare
+            ("shelfino_utils"), '/launch', '/shelfino1_launch.py'])),
+        IncludeLaunchDescription(PythonLaunchDescriptionSource([FindPackageShare
+            ("shelfino_utils"), '/launch', '/shelfino2_launch.py'])),
+        IncludeLaunchDescription(PythonLaunchDescriptionSource([FindPackageShare
+            ("shelfino_utils"), '/launch', '/shelfino3_launch.py']))
     ])

@@ -10,6 +10,7 @@ def generate_launch_description():
         Node(
             package='roadmap',
             executable='manager',
+            arguments=['--ros-args --log-level debug'],
             namespace=ns,
         ),
         Node(
@@ -21,7 +22,8 @@ def generate_launch_description():
         Node(
             package='rviz2',
             executable='rviz2',
-            arguments=['-d', os.path.join(my_package_dir, 'config', 'testing.rviz'), '--ros-args --log-level debug'],
+            arguments=['-d', os.path.join(my_package_dir, 'config', 'testing.rviz')],
+            output="log",
             remappings = remappings,
             namespace=ns,
             parameters=[{'use_sim_time': True}],
