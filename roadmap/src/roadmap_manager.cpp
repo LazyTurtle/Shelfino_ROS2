@@ -333,8 +333,12 @@ class RoadmapManager : public rclcpp::Node
       
       double start_x = request->start.x;
       double start_y = request->start.y;
+      double start_angle = request->start_angle;
+
       double end_x = request->end.x;
       double end_y = request->end.y;
+      double end_angle = request->end_angle;
+
       double minimum_width = request->minimum_path_width;
 
 
@@ -378,6 +382,8 @@ class RoadmapManager : public rclcpp::Node
       path_geo.push_back(p);
 
       r->points = path_geo;
+      r->start_angle = start_angle;
+      r->end_angle = end_angle;
       r->kmax = MAXIMUM_CURVATURE;
       r->komega = DISCRETIZATION_DELTA;
       r->refinements = REFINEMENTS;

@@ -221,9 +221,16 @@ class RobotDriver : public rclcpp::Node
         req->end.z = gate.position.z;
 
         // actually, half width plus a small tollerance
-        req->minimum_path_width = (ROBOT_WIDTH / 2.0) + 0.1;
+        req->minimum_path_width = (ROBOT_WIDTH / 2.0) + 0.15;
 
         req->obstacles = obstacles;
+
+        tf2::Quaternion q;
+        tf2::fromMsg(robot_position->transform.rotation, q);
+        tf2::Matrix3x3 m(q);
+        double roll, pitch, yaw;
+        m.getEulerYPR(yaw, pitch, roll);
+        req->start_angle = yaw;
 
         while (!client->wait_for_service(1s)){
           if (!rclcpp::ok()){

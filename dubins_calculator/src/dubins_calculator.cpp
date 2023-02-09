@@ -89,7 +89,8 @@ class DubinsCalculator : public rclcpp::Node
       const std::shared_ptr<dubins_planner_msgs::srv::MultiPointDubinsPlanning::Response> response){
 
       std::vector<geometry_msgs::msg::Point> waypoint_list = request->points;
-      double final_angle = request->angle;
+      double final_angle = request->end_angle;
+      double start_angle = request->start_angle;
       double Kmax = request->kmax;
       int omega = request->komega;
 
@@ -161,6 +162,13 @@ class DubinsCalculator : public rclcpp::Node
           temp_min_curve.L = std::numeric_limits<double>::max();
           double previous_theta = thetas[i];
 
+          if(i==0 & start_angle>=0.0){
+            // we are checking the first connection
+            // and we can't choose the actual angle
+            thetas[i] = start_angle;
+            continue;
+          }
+          // we are checking the connections in between starting position end final position
           for(double j = (-bound); j<=bound+1e-5; j+=diff){
             double local_angle = previous_theta+j;
             DubinsCurve temp_curve;
@@ -202,7 +210,7 @@ class DubinsCalculator : public rclcpp::Node
       {
         std::stringstream s;
         s << "Multi point dubins path calculation compleated.\n";
-        s << "Poses: "<<response->path.poses.size()<<"\n";
+        s << "Poses: "<<thetas.size()<<"\n";
         s << "Lenght: "<<response->lenght<<"\n";
         log_info(s.str());
       }
