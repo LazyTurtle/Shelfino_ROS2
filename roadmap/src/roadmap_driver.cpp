@@ -117,7 +117,7 @@ class RobotDriver : public rclcpp::Node
       client_ptr = rclcpp_action::create_client<nav2_msgs::action::FollowPath>(this,"follow_path");
       if (!client_ptr->wait_for_action_server()) {
       err("Action server not available after waiting");
-      rclcpp::shutdown();
+      return;
       }
       auto send_goal_options = rclcpp_action::Client<nav2_msgs::action::FollowPath>::SendGoalOptions();
       send_goal_options.goal_response_callback = 
@@ -130,17 +130,18 @@ class RobotDriver : public rclcpp::Node
       auto goal_msg = nav2_msgs::action::FollowPath::Goal();
       goal_msg.path = *path;
       goal_msg.controller_id = "FollowPath";
-      RCLCPP_INFO(this->get_logger(), "Sending goal");
+      log("Sending goal");
       client_ptr->async_send_goal(goal_msg, send_goal_options);
+      log("Goal sent.");
     }
 
     void goal_response_callback(rclcpp_action::ClientGoalHandle<nav2_msgs::action::FollowPath>::SharedPtr future)
       {
         auto goal_handle = future.get();
         if (!goal_handle) {
-          RCLCPP_ERROR(this->get_logger(), "Goal was rejected by server");
+          err("Goal was rejected by server");
         } else {
-          RCLCPP_INFO(this->get_logger(), "Goal accepted by server, waiting for result");
+          log("Goal accepted by server, waiting for result");
         }
       }
       

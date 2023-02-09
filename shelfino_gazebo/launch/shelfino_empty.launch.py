@@ -30,7 +30,7 @@ def generate_launch_description():
     model = os.path.join(gazebo_models_path, 'shelfino', 'model.sdf')
     os.environ["GAZEBO_MODEL_PATH"] = gazebo_models_path
 
-    rviz_config = os.path.join(get_package_share_directory('shelfino_gazebo'), 'rviz', 'shelfinoG.rviz')
+    rviz_config = os.path.join(get_package_share_directory('shelfino_gazebo'), 'rviz', 'shelfino1.rviz')
 
     remappings = [('/tf', 'tf'), ('/tf_static', 'tf_static')]
     ns = "shelfino1"
@@ -84,5 +84,13 @@ def generate_launch_description():
             executable='get_positions',
             namespace=ns,
             remappings=remappings
+        ),
+        Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            output="screen" ,
+            namespace=ns,
+            remappings=remappings,
+            arguments=["0", "0", "0", "0", "0", "0", "map", "odom"]
         ),
     ])

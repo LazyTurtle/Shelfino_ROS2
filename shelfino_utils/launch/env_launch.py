@@ -1,5 +1,8 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
+from launch.actions import IncludeLaunchDescription
+from launch_ros.substitutions import FindPackageShare
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 import os
 from ament_index_python.packages import get_package_share_directory
 remappings = [('/tf', 'tf'), ('/tf_static', 'tf_static')]
@@ -26,61 +29,13 @@ def generate_launch_description():
             package='dubins_calculator',
             executable='dubins_calculator',
         ),
-        Node(
-            package='roadmap',
-            executable='manager',
-            namespace="shelfino1",
-        ),        
-        Node(
-            package='roadmap',
-            executable='manager',
-            namespace="shelfino2",
-        ),
-        Node(
-            package='roadmap',
-            executable='manager',
-            namespace="shelfino3",
-        ),
-        Node(
-            package='roadmap',
-            executable='driver',
-            output='screen',
-            namespace="shelfino1",
-        ),
-        Node(
-            package='roadmap',
-            executable='driver',
-            output='screen',
-            namespace="shelfino2",
-        ),
-        Node(
-            package='roadmap',
-            executable='driver',
-            output='screen',
-            namespace="shelfino3",
-        ),
-        Node(
-            package='rviz2',
-            executable='rviz2',
-            arguments=['-d', os.path.join(my_package_dir, 'config', 'testing.rviz')],
-            remappings = remappings,
-            namespace="shelfino1",
-            parameters=[{'use_sim_time': True}],
-        ),
-        Node(
-            package='rviz2',
-            executable='rviz2',
-            arguments=['-d', os.path.join(my_package_dir, 'config', 'testing.rviz')],
-            remappings = remappings,
-            namespace="shelfino2",
-            parameters=[{'use_sim_time': True}],
-        ),
-        Node(
-            package='rviz2',
-            executable='rviz2',
-            arguments=['-d', os.path.join(my_package_dir, 'config', 'testing.rviz')],
-            remappings = remappings,
-            namespace="shelfino3",
-            parameters=[{'use_sim_time': True}],
-        )
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([
+                FindPackageShare("shelfino_utils"), '/launch', '/shelfino1_launch.py'])),
+        # IncludeLaunchDescription(
+        #     PythonLaunchDescriptionSource([
+        #         FindPackageShare("shelfino_utils"), '/launch', '/shelfino2_launch.py'])),
+        # IncludeLaunchDescription(
+        #     PythonLaunchDescriptionSource([
+        #         FindPackageShare("shelfino_utils"), '/launch', '/shelfino3_launch.py'])),
     ])
