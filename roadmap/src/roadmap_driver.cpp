@@ -107,6 +107,7 @@ class RobotDriver : public rclcpp::Node
     void find_best_path(
       const std::shared_ptr<std_srvs::srv::Empty_Request> request,
       std::shared_ptr<std_srvs::srv::Empty_Response> response){
+      log("Request test_drive");
       get_path();
       follow_path();
     }
@@ -116,8 +117,8 @@ class RobotDriver : public rclcpp::Node
       rclcpp_action::Client<nav2_msgs::action::FollowPath>::SharedPtr client_ptr;
       client_ptr = rclcpp_action::create_client<nav2_msgs::action::FollowPath>(this,"follow_path");
       if (!client_ptr->wait_for_action_server()) {
-      err("Action server not available after waiting");
-      return;
+        err("Action server not available after waiting");
+        return;
       }
       auto send_goal_options = rclcpp_action::Client<nav2_msgs::action::FollowPath>::SendGoalOptions();
       send_goal_options.goal_response_callback = 
@@ -135,26 +136,24 @@ class RobotDriver : public rclcpp::Node
       log("Goal sent.");
     }
 
-    void goal_response_callback(rclcpp_action::ClientGoalHandle<nav2_msgs::action::FollowPath>::SharedPtr future)
-      {
-        auto goal_handle = future.get();
-        if (!goal_handle) {
-          err("Goal was rejected by server");
-        } else {
-          log("Goal accepted by server, waiting for result");
-        }
+    void goal_response_callback(rclcpp_action::ClientGoalHandle<nav2_msgs::action::FollowPath>::SharedPtr future){
+      auto goal_handle = future.get();
+      if (!goal_handle) {
+        err("Goal was rejected by server");
+      } else {
+        log("Goal accepted by server, waiting for result");
       }
+    }
       
-      void feedback_callback(
-        rclcpp_action::ClientGoalHandle<nav2_msgs::action::FollowPath>::SharedPtr,
-        const std::shared_ptr<const nav2_msgs::action::FollowPath::Feedback> feedback)
-      {
-        std::stringstream ss;
-        ss << "Distance to goal: ";
-        auto p = feedback->distance_to_goal;
-        ss<<p;
-        log(ss.str());
-      }
+    void feedback_callback(
+      rclcpp_action::ClientGoalHandle<nav2_msgs::action::FollowPath>::SharedPtr,
+      const std::shared_ptr<const nav2_msgs::action::FollowPath::Feedback> feedback){
+      std::stringstream ss;
+      ss << "Distance to goal: ";
+      auto p = feedback->distance_to_goal;
+      ss<<p;
+      log(ss.str());
+    }
     
     void result_callback(const rclcpp_action::ClientGoalHandle<nav2_msgs::action::FollowPath>::WrappedResult & result){
       switch (result.code) {

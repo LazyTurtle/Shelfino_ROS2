@@ -61,7 +61,10 @@ def generate_launch_description():
             executable='spawn_entity.py',
             arguments=['-file', model,
                        '-entity', 'shelfino',
-                       '-robot_namespace', ns]
+                       '-robot_namespace', ns,
+                       '-x', '4',
+                       '-y', '1',
+                       '-Y', '1']
         ),
 
         IncludeLaunchDescription(
