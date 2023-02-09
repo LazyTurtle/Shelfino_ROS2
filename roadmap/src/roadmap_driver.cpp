@@ -119,12 +119,60 @@ class RobotDriver : public rclcpp::Node
       err("Action server not available after waiting");
       rclcpp::shutdown();
       }
+      auto send_goal_options = rclcpp_action::Client<nav2_msgs::action::FollowPath>::SendGoalOptions();
+      send_goal_options.goal_response_callback = 
+        std::bind(&RobotDriver::goal_response_callback, this, _1);
+      send_goal_options.feedback_callback =
+        std::bind(&RobotDriver::feedback_callback, this, _1, _2);
+      send_goal_options.result_callback = 
+        std::bind(&RobotDriver::result_callback, this, _1);
+
       auto goal_msg = nav2_msgs::action::FollowPath::Goal();
       goal_msg.path = *path;
       goal_msg.controller_id = "FollowPath";
       RCLCPP_INFO(this->get_logger(), "Sending goal");
-      client_ptr->async_send_goal(goal_msg);
+      client_ptr->async_send_goal(goal_msg, send_goal_options);
     }
+
+    void goal_response_callback(rclcpp_action::ClientGoalHandle<nav2_msgs::action::FollowPath>::SharedPtr future)
+      {
+        auto goal_handle = future.get();
+        if (!goal_handle) {
+          RCLCPP_ERROR(this->get_logger(), "Goal was rejected by server");
+        } else {
+          RCLCPP_INFO(this->get_logger(), "Goal accepted by server, waiting for result");
+        }
+      }
+      
+      void feedback_callback(
+        rclcpp_action::ClientGoalHandle<nav2_msgs::action::FollowPath>::SharedPtr,
+        const std::shared_ptr<const nav2_msgs::action::FollowPath::Feedback> feedback)
+      {
+        std::stringstream ss;
+        ss << "Distance to goal: ";
+        auto p = feedback->distance_to_goal;
+        ss<<p;
+        log(ss.str());
+      }
+    
+    void result_callback(const rclcpp_action::ClientGoalHandle<nav2_msgs::action::FollowPath>::WrappedResult & result){
+      switch (result.code) {
+        case rclcpp_action::ResultCode::SUCCEEDED:
+          break;
+        case rclcpp_action::ResultCode::ABORTED:
+          RCLCPP_ERROR(this->get_logger(), "Goal was aborted");
+          return;
+        case rclcpp_action::ResultCode::CANCELED:
+          RCLCPP_ERROR(this->get_logger(), "Goal was canceled");
+          return;
+        default:
+          RCLCPP_ERROR(this->get_logger(), "Unknown result code");
+          return;
+      }
+      log("result received.");
+      rclcpp::shutdown();
+    }
+    
 
     void get_path(){
       

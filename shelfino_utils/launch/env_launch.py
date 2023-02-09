@@ -29,33 +29,30 @@ def generate_launch_description():
         Node(
             package='roadmap',
             executable='manager',
-            output='screen',
             namespace="shelfino1",
         ),        
-        Node(
-            package='roadmap',
-            executable='driver',
-            output='screen',
-            namespace="shelfino1",
-        ),
         Node(
             package='roadmap',
             executable='manager',
-            output='screen',
-            namespace="shelfino2",
-        ),        
-        Node(
-            package='roadmap',
-            executable='driver',
-            output='screen',
             namespace="shelfino2",
         ),
         Node(
             package='roadmap',
             executable='manager',
-            output='screen',
             namespace="shelfino3",
-        ),        
+        ),
+        Node(
+            package='roadmap',
+            executable='driver',
+            output='screen',
+            namespace="shelfino1",
+        ),
+        Node(
+            package='roadmap',
+            executable='driver',
+            output='screen',
+            namespace="shelfino2",
+        ),
         Node(
             package='roadmap',
             executable='driver',
@@ -69,7 +66,6 @@ def generate_launch_description():
             remappings = remappings,
             namespace="shelfino1",
             parameters=[{'use_sim_time': True}],
-            output='screen',
         ),
         Node(
             package='rviz2',
@@ -78,7 +74,6 @@ def generate_launch_description():
             remappings = remappings,
             namespace="shelfino2",
             parameters=[{'use_sim_time': True}],
-            output='screen',
         ),
         Node(
             package='rviz2',
@@ -87,6 +82,5 @@ def generate_launch_description():
             remappings = remappings,
             namespace="shelfino3",
             parameters=[{'use_sim_time': True}],
-            output='screen',
         )
     ])

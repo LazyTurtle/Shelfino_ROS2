@@ -221,7 +221,7 @@ class RoadmapManager : public rclcpp::Node
 
   private:
 
-    const double MAXIMUM_CURVATURE = 4.0;
+    const double MAXIMUM_CURVATURE = 3.0;
     const int DISCRETIZATION_DELTA = 4;
     const int REFINEMENTS = 3;
     const double MINIMUM_WAYPOINT_DISTANCE = 0.5;
