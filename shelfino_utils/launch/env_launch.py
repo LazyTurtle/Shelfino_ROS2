@@ -26,8 +26,14 @@ def generate_launch_description():
             name='gates_node'
         ),
         Node(
+            package='roadmap',
+            executable='coordinator',
+            name='coordinator_node'
+        ),
+        Node(
             package='dubins_calculator',
             executable='dubins_calculator',
+            arguments=['--ros-args','--log-level','error'],
         ),
         IncludeLaunchDescription(PythonLaunchDescriptionSource([FindPackageShare
             ("shelfino_utils"), '/launch', '/shelfino1_launch.py'])),

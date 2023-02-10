@@ -40,7 +40,7 @@ struct DubinsCurve{
 class DubinsCalculator : public rclcpp::Node
 {
   public:
-    DubinsCalculator():Node("server"){
+    DubinsCalculator():Node("DubinsCalculator"){
 
       dubins_service = this->create_service<dubins_planner_msgs::srv::DubinsPlanning>
         (DUBINS_CALCULATOR_SERVICE, 
@@ -615,15 +615,15 @@ class DubinsCalculator : public rclcpp::Node
     }
 
     inline void log_info(const std::string log){
-      RCLCPP_INFO_STREAM(rclcpp::get_logger("rclcpp"),"Dubins calculator: "<<log);
+      RCLCPP_INFO(this->get_logger(), log.c_str());
     }
 
     inline void log_err(const std::string log){
-      RCLCPP_ERROR_STREAM(rclcpp::get_logger("rclcpp"),"Dubins calculator: "<<log);
+      RCLCPP_ERROR(this->get_logger(), log.c_str());
     }
 
     inline void log_warn(const std::string log){
-      RCLCPP_WARN_STREAM(rclcpp::get_logger("rclcpp"),"Dubins calculator: "<<log);
+      RCLCPP_WARN(this->get_logger(), log.c_str());
     }
     
 };

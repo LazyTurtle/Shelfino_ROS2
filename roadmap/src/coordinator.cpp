@@ -14,6 +14,7 @@
 #include "nav_msgs/msg/path.hpp"
 #include "nav2_msgs/action/follow_path.hpp"
 #include "roadmap_interfaces/srv/driver_service.hpp"
+#include "gazebo_msgs/srv/delete_model.hpp"
 #include "gazebo_msgs/srv/delete_entity.hpp"
 
 using std::placeholders::_1;
@@ -45,6 +46,10 @@ class Coordinator : public rclcpp::Node
     
     rclcpp::Service<std_srvs::srv::Empty>::SharedPtr coordinator_service;
 
+    void debug(std::string log){
+      RCLCPP_DEBUG(this->get_logger(), log.c_str());
+    }
+
     void log(std::string log){
       RCLCPP_INFO(this->get_logger(), log.c_str());
     }
@@ -70,7 +75,7 @@ class Coordinator : public rclcpp::Node
         return key;
       };
 
-      std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("evacuate_client");
+      std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("coordinator_evacuate_client");
 
       do{
         find_lengths();
@@ -110,7 +115,12 @@ class Coordinator : public rclcpp::Node
           remove_request->name = "shelfino"+std::to_string(min_shelfino);
           auto remove_result = remover->async_send_request(remove_request);
           if (rclcpp::spin_until_future_complete(client_node, remove_result) == rclcpp::FutureReturnCode::SUCCESS){
-            log("Shelfino"+std::to_string(min_shelfino)+" removed.");
+            auto result = remove_result.get();
+            if(result->success){
+              debug(result->status_message);
+            }else{
+              err(result->status_message);
+            }
           }else{
             err("Shelfino"+std::to_string(min_shelfino)+" NOT removed.");
           }
@@ -125,7 +135,7 @@ class Coordinator : public rclcpp::Node
     void find_lengths(){
       log("Find minimum path lengths");
       path_lengths.clear();
-      std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("coordinator_client_node");
+      std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("coordinator_find_path_client");
 
       for(int i = 0; i<=N_ROBOTS; i++){
         std::string service_path = "/shelfino"+std::to_string(i)+"/"+FIND_BEST_PATH_SERVICE;

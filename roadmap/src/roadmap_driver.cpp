@@ -87,6 +87,9 @@ class RobotDriver : public rclcpp::Node
 
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher;
 
+    void debug(std::string log){
+      RCLCPP_DEBUG(this->get_logger(), log.c_str());
+    }
 
     void log(std::string log){
       RCLCPP_INFO(this->get_logger(), log.c_str());
@@ -119,7 +122,7 @@ class RobotDriver : public rclcpp::Node
     void find_best_path(
       const std::shared_ptr<roadmap_interfaces::srv::DriverService_Request> request,
       std::shared_ptr<roadmap_interfaces::srv::DriverService_Response> response){
-      log("Request test_drive");
+      log("Requested the best path.");
       path_length = get_path();
       response->length = path_length;
       response->result = (path_length>=0.0)? true : false;
@@ -230,68 +233,59 @@ class RobotDriver : public rclcpp::Node
         err("There is no path to follow.");
         return;
       }
+      
+      auto client_node = rclcpp::Node::make_shared("follow_path_client");
+      follow_path_client = rclcpp_action::create_client<nav2_msgs::action::FollowPath>(client_node,"follow_path");
 
-      follow_path_client = rclcpp_action::create_client<nav2_msgs::action::FollowPath>(this,"follow_path");
-      if (!follow_path_client->wait_for_action_server()) {
+      if (!follow_path_client->wait_for_action_server(1s)) {
         err("Action server not available after waiting");
         return;
       }
-      auto send_goal_options = rclcpp_action::Client<nav2_msgs::action::FollowPath>::SendGoalOptions();
-      send_goal_options.goal_response_callback = 
-        std::bind(&RobotDriver::goal_response_callback, this, _1);
-      send_goal_options.feedback_callback =
-        std::bind(&RobotDriver::feedback_callback, this, _1, _2);
-      send_goal_options.result_callback = 
-        std::bind(&RobotDriver::result_callback, this, _1);
 
       auto goal_msg = nav2_msgs::action::FollowPath::Goal();
       goal_msg.path = *path;
       goal_msg.controller_id = "FollowPath";
       log("Sending goal");
-      follow_path_client->async_send_goal(goal_msg, send_goal_options);
-      log("Goal sent.");
 
-      while(!b_action_ended){
-        rclcpp::sleep_for(500ms);
+      auto goal_handle_future = follow_path_client->async_send_goal(goal_msg);
+      if (rclcpp::spin_until_future_complete(client_node, goal_handle_future) !=
+        rclcpp::FutureReturnCode::SUCCESS){
+        err("send goal call failed.");
+        return;
       }
-    }
-
-    void goal_response_callback(rclcpp_action::ClientGoalHandle<nav2_msgs::action::FollowPath>::SharedPtr future){
-      auto goal_handle = future.get();
+      log("Goal sent.");
+      rclcpp_action::ClientGoalHandle<nav2_msgs::action::FollowPath>::SharedPtr
+        goal_handle = goal_handle_future.get();
       if (!goal_handle) {
         err("Goal was rejected by server");
-      } else {
-        log("Goal accepted by server, waiting for result");
+        return;
       }
-    }
-      
-    void feedback_callback(
-      rclcpp_action::ClientGoalHandle<nav2_msgs::action::FollowPath>::SharedPtr,
-      const std::shared_ptr<const nav2_msgs::action::FollowPath::Feedback> feedback){
-      std::stringstream ss;
-      ss << "Distance to goal: ";
-      auto p = feedback->distance_to_goal;
-      ss<<p;
-      log(ss.str());
-    }
-    
-    void result_callback(const rclcpp_action::ClientGoalHandle<nav2_msgs::action::FollowPath>::WrappedResult & result){
-      switch (result.code) {
+      auto result_future = follow_path_client->async_get_result(goal_handle);
+
+      log("Waiting for result");
+      if (rclcpp::spin_until_future_complete(client_node, result_future) !=
+        rclcpp::FutureReturnCode::SUCCESS){
+        err("get result call failed");
+        return;
+      }
+
+      rclcpp_action::ClientGoalHandle<nav2_msgs::action::FollowPath>::WrappedResult
+        wrapped_result = result_future.get();
+
+      switch (wrapped_result.code) {
         case rclcpp_action::ResultCode::SUCCEEDED:
           break;
         case rclcpp_action::ResultCode::ABORTED:
-          RCLCPP_ERROR(this->get_logger(), "Goal was aborted");
+          err("Goal was aborted");
           return;
         case rclcpp_action::ResultCode::CANCELED:
-          RCLCPP_ERROR(this->get_logger(), "Goal was canceled");
+          err("Goal was canceled");
           return;
         default:
-          RCLCPP_ERROR(this->get_logger(), "Unknown result code");
+          err("Unknown result code");
           return;
       }
-      
-      log("result received.");
-      b_action_ended = true;
+      log("Goal reached.");
     }
     
     std::vector<geometry_msgs::msg::Polygon> obstacles_from_robots(){
@@ -356,7 +350,7 @@ class RobotDriver : public rclcpp::Node
         for(auto po:points){
           std::ostringstream s;
           s<<"x:"<<po.x<<" y:"<<po.y;
-          log(s.str());
+          debug(s.str());
         }
         
         return p;

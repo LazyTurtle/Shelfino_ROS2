@@ -18,7 +18,7 @@ def generate_launch_description():
         Node(
             package='roadmap',
             executable='manager',
-            arguments=['--ros-args --log-level debug'],
+            arguments=['--ros-args','--log-level','error'],
             namespace=ns,
         ),
         Node(
