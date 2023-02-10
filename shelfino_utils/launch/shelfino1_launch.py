@@ -8,6 +8,14 @@ def generate_launch_description():
     my_package_dir = get_package_share_directory("shelfino_utils")
     return LaunchDescription([
         Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            output="screen" ,
+            namespace=ns,
+            remappings=remappings,
+            arguments=["0", "0", "0", "0", "0", "0", "map", "odom"]
+        ),
+        Node(
             package='roadmap',
             executable='manager',
             arguments=['--ros-args --log-level debug'],

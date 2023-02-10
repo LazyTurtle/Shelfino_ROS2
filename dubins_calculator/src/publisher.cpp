@@ -50,7 +50,7 @@ class MinimalPublisher : public rclcpp::Node
 
       request->points.insert(request->points.end(),{p1,p2,p3,p4,p5,p6,p7});
       request->kmax = 3;
-      request->angle = 1.5*3.141592;
+      request->end_angle = 1.5*3.141592;
 
 
       while (!client->wait_for_service(2s)) {
