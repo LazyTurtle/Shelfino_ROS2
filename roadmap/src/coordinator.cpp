@@ -29,6 +29,7 @@ class Coordinator : public rclcpp::Node
     : Node("robot_coordinator"){
       coordinator_service = this->create_service<std_srvs::srv::Empty>(
         COORDINATOR_SERVICE, std::bind(&Coordinator::coordinate_evacuation, this, _1, _2));
+      log("Ready.");
     }
 
   private:
@@ -55,6 +56,7 @@ class Coordinator : public rclcpp::Node
     void coordinate_evacuation(
       const std::shared_ptr<std_srvs::srv::Empty_Request> request,
       std::shared_ptr<std_srvs::srv::Empty_Response> response){
+      log("Start evacuation.");
  
       auto min_key = [](const std::map<int,double>& map){
         double min_value = std::numeric_limits<double>().infinity();
@@ -67,7 +69,6 @@ class Coordinator : public rclcpp::Node
         }
         return key;
       };
-      log("Coordination check.");
 
       std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("evacuate_client");
 
@@ -91,7 +92,7 @@ class Coordinator : public rclcpp::Node
           log("service not available, waiting again...");
         }
         log("Requesting evacuate service from driver "+std::to_string(min_shelfino));
-        auto r = std::shared_ptr<std_srvs::srv::Empty_Request>();
+        auto r = std::make_shared<std_srvs::srv::Empty_Request>();
         auto result = client->async_send_request(r);
 
         if (rclcpp::spin_until_future_complete(client_node, result) == rclcpp::FutureReturnCode::SUCCESS){
@@ -105,7 +106,7 @@ class Coordinator : public rclcpp::Node
             }
             log("service not available, waiting again...");
           }
-          auto remove_request = std::shared_ptr<gazebo_msgs::srv::DeleteEntity_Request>();
+          auto remove_request = std::make_shared<gazebo_msgs::srv::DeleteEntity_Request>();
           remove_request->name = "shelfino"+std::to_string(min_shelfino);
           auto remove_result = remover->async_send_request(remove_request);
           if (rclcpp::spin_until_future_complete(client_node, remove_result) == rclcpp::FutureReturnCode::SUCCESS){
@@ -124,21 +125,18 @@ class Coordinator : public rclcpp::Node
     void find_lengths(){
       log("Find minimum path lengths");
       path_lengths.clear();
-      std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("driver_client");
+      std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("coordinator_client_node");
 
       for(int i = 0; i<=N_ROBOTS; i++){
         std::string service_path = "/shelfino"+std::to_string(i)+"/"+FIND_BEST_PATH_SERVICE;
         auto client = client_node->create_client<roadmap_interfaces::srv::DriverService>(service_path);
 
-        while (!client->wait_for_service(1s)){
-          if (!rclcpp::ok()){
-            err("Interrupted while waiting for the service. Exiting.");
-            return;
-          }
-          log("service not available, waiting again...");
+        if(!client->wait_for_service(2s)){
+          err("Not found for "+service_path);
+          continue;
         }
         log("Requesting path length from driver "+std::to_string(i));
-        auto r = std::shared_ptr<roadmap_interfaces::srv::DriverService_Request>();
+        auto r = std::make_shared<roadmap_interfaces::srv::DriverService_Request>();
         auto result = client->async_send_request(r);
 
         if (rclcpp::spin_until_future_complete(client_node, result) == rclcpp::FutureReturnCode::SUCCESS){
