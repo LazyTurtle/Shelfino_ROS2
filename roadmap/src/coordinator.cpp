@@ -35,6 +35,9 @@ class Coordinator : public rclcpp::Node
   private:
 
     const int N_ROBOTS = 3;
+    
+    const std::string FIND_BEST_PATH_SERVICE = "find_best_path";
+
 
     void log(std::string log){
       RCLCPP_INFO(this->get_logger(), log.c_str());
@@ -42,6 +45,13 @@ class Coordinator : public rclcpp::Node
 
     void err(std::string log){
       RCLCPP_ERROR(this->get_logger(), log.c_str());
+    }
+
+    void evacuation(){
+      std::vector<double> path_lengths;
+      for(int i = 0; i<=N_ROBOTS; i++){
+        
+      }
     }
     
 };

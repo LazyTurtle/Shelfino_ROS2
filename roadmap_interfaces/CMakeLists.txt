@@ -15,6 +15,7 @@ find_package(builtin_interfaces REQUIRED)
 
 set(srv_files
   "srv/PathService.srv"
+  "srv/DriverService.srv"
 )
 
 rosidl_generate_interfaces(${PROJECT_NAME}

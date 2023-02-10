@@ -67,6 +67,7 @@ target_include_directories(manager PUBLIC
 install(TARGETS
   manager
   driver
+  coordinator
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)

@@ -13,6 +13,7 @@
 #include "nav_msgs/msg/path.hpp"
 #include "nav2_msgs/action/follow_path.hpp"
 #include "roadmap_interfaces/srv/path_service.hpp"
+#include "roadmap_interfaces/srv/driver_service.hpp"
 
 using std::placeholders::_1;
 using std::placeholders::_2;
@@ -38,8 +39,8 @@ class RobotDriver : public rclcpp::Node
       robot_position_subscriber = this->create_subscription<geometry_msgs::msg::TransformStamped>(
         ROBOT_POSITION_TOPIC, qos, std::bind(&RobotDriver::set_robot_position, this, _1));
 
-      test_service = this->create_service<std_srvs::srv::Empty>(
-        "test_drive", std::bind(&RobotDriver::find_best_path, this, _1, _2));
+      best_path_service = this->create_service<roadmap_interfaces::srv::DriverService>(
+        FIND_BEST_PATH_SERVICE, std::bind(&RobotDriver::find_best_path, this, _1, _2));
 
 
       path_publisher = this->create_publisher<nav_msgs::msg::Path>(PATH_TOPIC, qos);
@@ -63,9 +64,11 @@ class RobotDriver : public rclcpp::Node
     const std::string ROBOT_POSITION_TOPIC = "transform";
     const std::string PATH_TOPIC = "shortest_path";
 
+    const std::string FIND_BEST_PATH_SERVICE = "find_best_path";
+
     int robot_id;
 
-    rclcpp::Service<std_srvs::srv::Empty>::SharedPtr test_service;
+    rclcpp::Service<roadmap_interfaces::srv::DriverService>::SharedPtr best_path_service;
     rclcpp_action::Client<nav2_msgs::action::FollowPath>::SharedPtr follow_path_client;
 
 
@@ -107,11 +110,106 @@ class RobotDriver : public rclcpp::Node
     }
 
     void find_best_path(
-      const std::shared_ptr<std_srvs::srv::Empty_Request> request,
-      std::shared_ptr<std_srvs::srv::Empty_Response> response){
+      const std::shared_ptr<roadmap_interfaces::srv::DriverService_Request> request,
+      std::shared_ptr<roadmap_interfaces::srv::DriverService_Response> response){
       log("Request test_drive");
-      get_path();
-      follow_path();
+      path_length = get_path();
+      response->lenght = path_length;
+      response->result = (path_length>=0.0)? true : false;
+    }
+
+    double get_path(){
+      
+      if(!gates){
+        err("Gates pointer is null");
+        return -1.0;
+      }
+      if(!robot_position){
+        err("The robot position is null");
+        return -1.0;
+      }
+
+      auto length_of_path = [](const nav_msgs::msg::Path& path){
+        double length = 0.0;
+        for(std::size_t i=1; i<path.poses.size(); i++){
+          double dx = path.poses[i].pose.position.x - path.poses[i-1].pose.position.x;
+          double dy = path.poses[i].pose.position.y - path.poses[i-1].pose.position.y;
+          double dz = path.poses[i].pose.position.z - path.poses[i-1].pose.position.z;
+          double dd = std::sqrt(std::pow(dx, 2.0)+std::pow(dy, 2.0)+std::pow(dz, 2.0));
+          length += dd;
+        }
+        return length;
+      };
+
+      std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared(ROADMAP_SERVICE_NAME+"_client");
+      auto client = client_node->create_client<roadmap_interfaces::srv::PathService>(ROADMAP_SERVICE_NAME);
+      
+      std::vector<nav_msgs::msg::Path> possible_paths;
+      auto obstacles = obstacles_from_robots();
+
+      for(auto gate:gates->poses){
+        {
+          std::ostringstream s;
+          s<<"Lookign for path to x:"<<gate.position.x<<" y:"<<gate.position.y;
+          log(s.str());
+        }
+
+        auto req = std::make_shared<roadmap_interfaces::srv::PathService::Request>();
+
+        req->start.x = robot_position->transform.translation.x;
+        req->start.y = robot_position->transform.translation.y;
+        req->start.z = robot_position->transform.translation.z;
+
+        req->end.x = gate.position.x;
+        req->end.y = gate.position.y;
+        req->end.z = gate.position.z;
+
+        // actually, half width plus a small tollerance
+        req->minimum_path_width = (ROBOT_WIDTH / 2.0) + 0.10;
+
+        req->obstacles = obstacles;
+
+        tf2::Quaternion q;
+        tf2::fromMsg(robot_position->transform.rotation, q);
+        tf2::Matrix3x3 m(q);
+        double roll, pitch, yaw;
+        m.getEulerYPR(yaw, pitch, roll);
+        req->start_angle = yaw;
+
+        while (!client->wait_for_service(1s)){
+          if (!rclcpp::ok()){
+            err("Interrupted while waiting for the service. Exiting.");
+            return -1.0;
+          }
+          log("service not available, waiting again...");
+        }
+        log("Requesting path from roadmap manager.");
+        auto result = client->async_send_request(req);
+
+        if (rclcpp::spin_until_future_complete(client_node, result) == rclcpp::FutureReturnCode::SUCCESS){
+          auto res = result.get();
+
+          if(res->result)
+            possible_paths.push_back(res->path);
+          else
+            err("There was no availabe path.");
+        }else{
+          err("Failed to call service "+ROADMAP_SERVICE_NAME);
+        }
+      }
+
+      std::vector<double> lengths;
+      for(auto path:possible_paths){
+        lengths.push_back(length_of_path(path));
+      }
+
+      auto min_itr = std::min_element(lengths.begin(), lengths.end());
+      int min_index = std::distance(lengths.begin(), min_itr);
+
+      path = std::make_shared<nav_msgs::msg::Path>(possible_paths[min_index]);
+      double p_length = lengths[min_index];
+      log("Shortest path obtained.");
+      return p_length;
     }
 
     void follow_path(){
@@ -174,101 +272,6 @@ class RobotDriver : public rclcpp::Node
       rclcpp::shutdown();
     }
     
-
-    void get_path(){
-      
-      if(!gates){
-        err("Gates pointer is null");
-        return;
-      }
-      if(!robot_position){
-        err("The robot position is null");
-        return;
-      }
-
-      auto length_of_path = [](const nav_msgs::msg::Path& path){
-        double length = 0.0;
-        for(std::size_t i=1; i<path.poses.size(); i++){
-          double dx = path.poses[i].pose.position.x - path.poses[i-1].pose.position.x;
-          double dy = path.poses[i].pose.position.y - path.poses[i-1].pose.position.y;
-          double dz = path.poses[i].pose.position.z - path.poses[i-1].pose.position.z;
-          double dd = std::sqrt(std::pow(dx, 2.0)+std::pow(dy, 2.0)+std::pow(dz, 2.0));
-          length += dd;
-        }
-        return length;
-      };
-
-      std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared(ROADMAP_SERVICE_NAME+"_client");
-      auto client = client_node->create_client<roadmap_interfaces::srv::PathService>(ROADMAP_SERVICE_NAME);
-      
-      std::vector<nav_msgs::msg::Path> possible_paths;
-      auto obstacles = obstacles_from_robots();
-
-      for(auto gate:gates->poses){
-        {
-          std::ostringstream s;
-          s<<"Lookign for path to x:"<<gate.position.x<<" y:"<<gate.position.y;
-          log(s.str());
-        }
-
-        auto req = std::make_shared<roadmap_interfaces::srv::PathService::Request>();
-
-        req->start.x = robot_position->transform.translation.x;
-        req->start.y = robot_position->transform.translation.y;
-        req->start.z = robot_position->transform.translation.z;
-
-        req->end.x = gate.position.x;
-        req->end.y = gate.position.y;
-        req->end.z = gate.position.z;
-
-        // actually, half width plus a small tollerance
-        req->minimum_path_width = (ROBOT_WIDTH / 2.0) + 0.10;
-
-        req->obstacles = obstacles;
-
-        tf2::Quaternion q;
-        tf2::fromMsg(robot_position->transform.rotation, q);
-        tf2::Matrix3x3 m(q);
-        double roll, pitch, yaw;
-        m.getEulerYPR(yaw, pitch, roll);
-        req->start_angle = yaw;
-
-        while (!client->wait_for_service(1s)){
-          if (!rclcpp::ok()){
-            err("Interrupted while waiting for the service. Exiting.");
-            return;
-          }
-          log("service not available, waiting again...");
-        }
-        log("Requesting path from roadmap manager.");
-        auto result = client->async_send_request(req);
-
-        if (rclcpp::spin_until_future_complete(client_node, result) == rclcpp::FutureReturnCode::SUCCESS){
-          auto res = result.get();
-
-          if(res->result)
-            possible_paths.push_back(res->path);
-          else
-            err("There was no availabe path.");
-        }else{
-          err("Failed to call service "+ROADMAP_SERVICE_NAME);
-        }
-      }
-
-      std::vector<double> lengths;
-      for(auto path:possible_paths){
-        lengths.push_back(length_of_path(path));
-      }
-
-      auto min_itr = std::min_element(lengths.begin(), lengths.end());
-      int min_index = std::distance(lengths.begin(), min_itr);
-
-      path = std::make_shared<nav_msgs::msg::Path>(possible_paths[min_index]);
-      path_length = lengths[min_index];
-      log("Shortest path obtained.");
-
-    }
-
     std::vector<geometry_msgs::msg::Polygon> obstacles_from_robots(){
       std::vector<geometry_msgs::msg::Polygon> obstacles;
       std::vector<geometry_msgs::msg::TransformStamped> transforms = get_robot_transforms();
