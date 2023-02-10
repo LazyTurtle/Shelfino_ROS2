@@ -53,8 +53,10 @@ class RobotDriver : public rclcpp::Node
   private:
 
     rclcpp::Service<std_srvs::srv::Empty>::SharedPtr test_service;
+    rclcpp_action::Client<nav2_msgs::action::FollowPath>::SharedPtr follow_path_client;
 
-    const double ROBOT_WIDTH = 0.5;
+
+    const double ROBOT_WIDTH = 0.6;
     const int N_ROBOTS = 3;
 
     const std::chrono::milliseconds publishers_period = 1000ms;
@@ -114,9 +116,8 @@ class RobotDriver : public rclcpp::Node
 
     void follow_path(){
 
-      rclcpp_action::Client<nav2_msgs::action::FollowPath>::SharedPtr client_ptr;
-      client_ptr = rclcpp_action::create_client<nav2_msgs::action::FollowPath>(this,"follow_path");
-      if (!client_ptr->wait_for_action_server()) {
+      follow_path_client = rclcpp_action::create_client<nav2_msgs::action::FollowPath>(this,"follow_path");
+      if (!follow_path_client->wait_for_action_server()) {
         err("Action server not available after waiting");
         return;
       }
@@ -132,7 +133,7 @@ class RobotDriver : public rclcpp::Node
       goal_msg.path = *path;
       goal_msg.controller_id = "FollowPath";
       log("Sending goal");
-      client_ptr->async_send_goal(goal_msg, send_goal_options);
+      follow_path_client->async_send_goal(goal_msg, send_goal_options);
       log("Goal sent.");
     }
 
@@ -221,7 +222,7 @@ class RobotDriver : public rclcpp::Node
         req->end.z = gate.position.z;
 
         // actually, half width plus a small tollerance
-        req->minimum_path_width = (ROBOT_WIDTH / 2.0) + 0.15;
+        req->minimum_path_width = (ROBOT_WIDTH / 2.0) + 0.10;
 
         req->obstacles = obstacles;
 

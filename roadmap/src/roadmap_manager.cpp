@@ -289,6 +289,15 @@ class RoadmapManager : public rclcpp::Node
         WIDTHS_TOPIC, qos);
       
       markers.markers = std::vector<visualization_msgs::msg::Marker>(MARKERS_NUM);
+      std_msgs::msg::Header h;
+      h.frame_id = "map";
+      h.stamp = this->now();
+      for(auto& m:markers.markers){
+        m.header = h;
+      }
+      for(auto& m:width_text.markers){
+        m.header = h;
+      }
 
       auto interval = 1000ms;
       timer_ = this->create_wall_timer(interval, std::bind(&RoadmapManager::publish_data, this));
