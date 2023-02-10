@@ -114,7 +114,7 @@ class RobotDriver : public rclcpp::Node
       std::shared_ptr<roadmap_interfaces::srv::DriverService_Response> response){
       log("Request test_drive");
       path_length = get_path();
-      response->lenght = path_length;
+      response->length = path_length;
       response->result = (path_length>=0.0)? true : false;
     }
 

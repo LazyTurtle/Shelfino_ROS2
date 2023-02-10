@@ -47,14 +47,13 @@ class Coordinator : public rclcpp::Node
       RCLCPP_ERROR(this->get_logger(), log.c_str());
     }
 
-    void coordination_check(){
-      if(!bCoordinate)
-        return;
+    void coordination_check(){      
+      find_lengths();
       
     }
 
-    void find_lenghts(){
-      
+    void find_lengths(){
+      path_lengths.clear();
       std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("driver_client");
 
       for(int i = 0; i<=N_ROBOTS; i++){
@@ -68,15 +67,15 @@ class Coordinator : public rclcpp::Node
           }
           log("service not available, waiting again...");
         }
-        log("Requesting path lenght from driver "+std::to_string(i));
+        log("Requesting path length from driver "+std::to_string(i));
         auto r = std::shared_ptr<roadmap_interfaces::srv::DriverService_Request>();
         auto result = client->async_send_request(r);
 
         if (rclcpp::spin_until_future_complete(client_node, result) == rclcpp::FutureReturnCode::SUCCESS){
           auto res = result.get();
-          if(res->result && res->lenght>0.0){
-            path_lengths[i] = res->lenght;
-            log("Path lenght obtained: "+std::to_string(res->lenght));
+          if(res->result && res->length>0.0){
+            path_lengths[i] = res->length;
+            log("Path length obtained: "+std::to_string(res->length));
           }
           else{
             err("There was no availabe path.");
