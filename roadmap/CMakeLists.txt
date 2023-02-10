@@ -48,6 +48,17 @@ ament_target_dependencies(driver
   nav2_msgs
   rclcpp_action
 )
+add_executable(coordinator src/coordinator.cpp)
+ament_target_dependencies(coordinator
+  rclcpp
+  geometry_msgs
+  roadmap_interfaces
+  std_srvs
+  tf2_geometry_msgs
+  nav_msgs
+  nav2_msgs
+  rclcpp_action
+)
 
 target_include_directories(manager PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

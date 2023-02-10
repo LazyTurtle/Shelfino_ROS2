@@ -52,10 +52,6 @@ class RobotDriver : public rclcpp::Node
 
   private:
 
-    rclcpp::Service<std_srvs::srv::Empty>::SharedPtr test_service;
-    rclcpp_action::Client<nav2_msgs::action::FollowPath>::SharedPtr follow_path_client;
-
-
     const double ROBOT_WIDTH = 0.6;
     const int N_ROBOTS = 3;
 
@@ -68,7 +64,11 @@ class RobotDriver : public rclcpp::Node
     const std::string PATH_TOPIC = "shortest_path";
 
     int robot_id;
-    
+
+    rclcpp::Service<std_srvs::srv::Empty>::SharedPtr test_service;
+    rclcpp_action::Client<nav2_msgs::action::FollowPath>::SharedPtr follow_path_client;
+
+
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr gates_subscriber;
     rclcpp::Subscription<geometry_msgs::msg::TransformStamped>::SharedPtr robot_position_subscriber;
 
