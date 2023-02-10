@@ -31,10 +31,13 @@ class Coordinator : public rclcpp::Node
 
   private:
 
+    const std::string FIND_BEST_PATH_SERVICE = "find_best_path";
+    const std::string EVACUATE_SERVICE = "evacuate";
+
+    rclcpp::TimerBase::SharedPtr timer;
     const int N_ROBOTS = 3;
     std::map<int,double> path_lengths;
-    const std::string FIND_BEST_PATH_SERVICE = "find_best_path";
-    rclcpp::TimerBase::SharedPtr timer;
+
 
     bool bCoordinate = false;
 
@@ -47,9 +50,53 @@ class Coordinator : public rclcpp::Node
       RCLCPP_ERROR(this->get_logger(), log.c_str());
     }
 
-    void coordination_check(){      
-      find_lengths();
-      
+    void coordination_check(){    
+      auto min_key = [](const std::map<int,double>& map){
+        double min_value = std::numeric_limits<double>().infinity();
+        int key;
+        for(auto pair:map){
+          if(min_value>pair.second){
+            min_value = pair.second;
+            key = pair.first;
+          }
+        }
+        return key;
+      };
+      log("Coordination check.");
+
+      std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("evacuate_client");
+
+      do{
+        find_lengths();
+        if(path_lengths.size()==0){
+          err("No paths");
+          break;
+        }
+
+        int min_shelfino = min_key(path_lengths);
+
+        std::string shelfino_service = "/shelfino"+std::to_string(min_shelfino)+"/"+EVACUATE_SERVICE;
+        auto client = client_node->create_client<std_srvs::srv::Empty>(shelfino_service);
+
+        while (!client->wait_for_service(1s)){
+          if (!rclcpp::ok()){
+            err("Interrupted while waiting for the service "+shelfino_service);
+            return;
+          }
+          log("service not available, waiting again...");
+        }
+        log("Requesting evacuate service from driver "+std::to_string(min_shelfino));
+        auto r = std::shared_ptr<std_srvs::srv::Empty_Request>();
+        auto result = client->async_send_request(r);
+
+        if (rclcpp::spin_until_future_complete(client_node, result) == rclcpp::FutureReturnCode::SUCCESS){
+          log("Evacuation compleated");
+          path_lengths.erase(min_shelfino);
+        }else{
+          err("Failed to call service "+FIND_BEST_PATH_SERVICE);
+        }
+        
+      }while(path_lengths.size()>0);
     }
 
     void find_lengths(){

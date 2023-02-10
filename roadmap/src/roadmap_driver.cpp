@@ -42,6 +42,8 @@ class RobotDriver : public rclcpp::Node
       best_path_service = this->create_service<roadmap_interfaces::srv::DriverService>(
         FIND_BEST_PATH_SERVICE, std::bind(&RobotDriver::find_best_path, this, _1, _2));
 
+      evacuate_service = this->create_service<std_srvs::srv::Empty>(
+        EVACUATE_SERVICE, std::bind(&RobotDriver::evacuate, this, _1, _2));
 
       path_publisher = this->create_publisher<nav_msgs::msg::Path>(PATH_TOPIC, qos);
 
@@ -65,10 +67,15 @@ class RobotDriver : public rclcpp::Node
     const std::string PATH_TOPIC = "shortest_path";
 
     const std::string FIND_BEST_PATH_SERVICE = "find_best_path";
+    const std::string EVACUATE_SERVICE = "evacuate";
 
     int robot_id;
 
+    bool b_action_ended = false;
+
     rclcpp::Service<roadmap_interfaces::srv::DriverService>::SharedPtr best_path_service;
+    rclcpp::Service<std_srvs::srv::Empty>::SharedPtr evacuate_service;
+
     rclcpp_action::Client<nav2_msgs::action::FollowPath>::SharedPtr follow_path_client;
 
 
@@ -117,6 +124,12 @@ class RobotDriver : public rclcpp::Node
       response->length = path_length;
       response->result = (path_length>=0.0)? true : false;
     }
+
+    void evacuate(
+      const std::shared_ptr<std_srvs::srv::Empty_Request> request,
+      std::shared_ptr<std_srvs::srv::Empty_Response> response){
+        follow_path();
+      }
 
     double get_path(){
       
@@ -213,6 +226,10 @@ class RobotDriver : public rclcpp::Node
     }
 
     void follow_path(){
+      if(!path){
+        err("There is no path to follow.");
+        return;
+      }
 
       follow_path_client = rclcpp_action::create_client<nav2_msgs::action::FollowPath>(this,"follow_path");
       if (!follow_path_client->wait_for_action_server()) {
@@ -233,6 +250,10 @@ class RobotDriver : public rclcpp::Node
       log("Sending goal");
       follow_path_client->async_send_goal(goal_msg, send_goal_options);
       log("Goal sent.");
+
+      while(!b_action_ended){
+        rclcpp::sleep_for(500ms);
+      }
     }
 
     void goal_response_callback(rclcpp_action::ClientGoalHandle<nav2_msgs::action::FollowPath>::SharedPtr future){
@@ -268,8 +289,9 @@ class RobotDriver : public rclcpp::Node
           RCLCPP_ERROR(this->get_logger(), "Unknown result code");
           return;
       }
+      
       log("result received.");
-      rclcpp::shutdown();
+      b_action_ended = true;
     }
     
     std::vector<geometry_msgs::msg::Polygon> obstacles_from_robots(){
