@@ -20,6 +20,7 @@ find_package(dubins_planner REQUIRED)
 find_package(dubins_planner_msgs REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(rclcpp_action REQUIRED)
+find_package(gazebo_msgs REQUIRED)
 
 include_directories(include)
 
@@ -48,6 +49,18 @@ ament_target_dependencies(driver
   nav2_msgs
   rclcpp_action
 )
+add_executable(coordinator src/coordinator.cpp)
+ament_target_dependencies(coordinator
+  rclcpp
+  geometry_msgs
+  roadmap_interfaces
+  std_srvs
+  tf2_geometry_msgs
+  nav_msgs
+  nav2_msgs
+  rclcpp_action
+  gazebo_msgs
+)
 
 target_include_directories(manager PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -56,6 +69,7 @@ target_include_directories(manager PUBLIC
 install(TARGETS
   manager
   driver
+  coordinator
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
