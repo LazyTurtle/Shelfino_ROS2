@@ -61,7 +61,7 @@ class Coordinator : public rclcpp::Node
     void coordinate_evacuation(
       const std::shared_ptr<std_srvs::srv::Empty_Request> request,
       std::shared_ptr<std_srvs::srv::Empty_Response> response){
-      log("Start evacuation.");
+      log("Start coordinated evacuation.");
  
       auto min_key = [](const std::map<int,double>& map){
         double min_value = std::numeric_limits<double>().infinity();
@@ -75,74 +75,41 @@ class Coordinator : public rclcpp::Node
         return key;
       };
 
-      std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("coordinator_evacuate_client");
-
-      do{
-        find_lengths();
-        if(path_lengths.size()==0){
-          err("No paths");
-          break;
-        }
-
+      find_lengths();
+      while(path_lengths.size()>0){
         int min_shelfino = min_key(path_lengths);
 
-        std::string shelfino_service = "/shelfino"+std::to_string(min_shelfino)+"/"+EVACUATE_SERVICE;
-        auto client = client_node->create_client<std_srvs::srv::Empty>(shelfino_service);
+        evacuate_shelfino(min_shelfino);
 
-        while (!client->wait_for_service(1s)){
-          if (!rclcpp::ok()){
-            err("Interrupted while waiting for the service "+shelfino_service);
-            return;
-          }
-          log("service not available, waiting again...");
+        find_lengths();
+      }
+      log("Coordination finished.");
+    }
+
+    void evacuate_shelfino(int shelfino_id){
+      log("Evacuate shelfino"+std::to_string(shelfino_id));
+      std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("coordinator_evacuate_client");
+      std::string shelfino_service = "/shelfino"+std::to_string(shelfino_id)+"/"+EVACUATE_SERVICE;
+      auto client = client_node->create_client<std_srvs::srv::Empty>(shelfino_service);
+
+      while (!client->wait_for_service(1s)){
+        if (!rclcpp::ok()){
+          err("Interrupted while waiting for the service "+shelfino_service);
+          return;
         }
-        log("Requesting evacuate service from driver "+std::to_string(min_shelfino));
-        auto r = std::make_shared<std_srvs::srv::Empty_Request>();
-        auto result = client->async_send_request(r);
+        log("service not available, waiting again...");
+      }
 
-        if (rclcpp::spin_until_future_complete(client_node, result) == rclcpp::FutureReturnCode::SUCCESS){
-          log("Evacuation compleated");
-          path_lengths.erase(min_shelfino);
-          auto client_node_remover = rclcpp::Node::make_shared("coordinator_remover_client");
-          auto remover = client_node_remover->create_client<gazebo_msgs::srv::DeleteEntity>(GAZEBO_DELETE_SERVICE);
-          debug("waiting for the service...");
-          while (!remover->wait_for_service(1s)){
-            if (!rclcpp::ok()){
-              err("Interrupted while waiting for the service "+GAZEBO_DELETE_SERVICE);
-              return;
-            }
-            debug("service not available, waiting again...");
-          }
-          auto remove_request = std::make_shared<gazebo_msgs::srv::DeleteEntity_Request>();
-          std::string shelfino_name = "shelfino"+std::to_string(min_shelfino);
-          remove_request->name = shelfino_name.c_str();
-          debug("Trying to delete "+shelfino_name);
-          auto remove_result = remover->async_send_request(remove_request);
-          if (rclcpp::spin_until_future_complete(client_node_remover, remove_result) == rclcpp::FutureReturnCode::SUCCESS){
-            auto result = remove_result.get();
-            if(result->success){
-              log(result->status_message);
-            }else{
-              err(result->status_message);
-            }
-          }else{
-            err("Shelfino"+std::to_string(min_shelfino)+" NOT removed.");
-          }
-          std::string tr = "/shelfino"+std::to_string(min_shelfino)+"/shutdown";
-          auto transform_remover = client_node_remover->create_client<std_srvs::srv::Empty>(tr);
-          auto empty = std::make_shared<std_srvs::srv::Empty_Request>();
-          auto empty_res = transform_remover->async_send_request(empty);
-          if (rclcpp::spin_until_future_complete(client_node_remover, empty_res) == rclcpp::FutureReturnCode::SUCCESS){
-            log("Transform shutdown");
-          }else{
-            err("Transform shutdown error.");
-          }
-
-        }else{
-          err("Failed to call service "+FIND_BEST_PATH_SERVICE);
-        }
-        
-      }while(path_lengths.size()>0);
+      log("Requesting evacuate service from driver "+std::to_string(shelfino_id));
+      auto r = std::make_shared<std_srvs::srv::Empty_Request>();
+      auto result = client->async_send_request(r);
+      if (rclcpp::spin_until_future_complete(client_node, result) == rclcpp::FutureReturnCode::SUCCESS){
+        log("Evacuation compleated");
+        delete_shelfino(shelfino_id);
+        shutdown_shelfino_transform(shelfino_id);
+      }else{
+        err("Failed to call service "+FIND_BEST_PATH_SERVICE);
+      }
     }
 
     void find_lengths(){
@@ -176,7 +143,64 @@ class Coordinator : public rclcpp::Node
         }
       }
     }
-    
+
+    bool delete_shelfino(int shelfino_id){
+      log("Delete shelfino "+std::to_string(shelfino_id));
+      bool delete_result = false;
+      path_lengths.erase(shelfino_id);
+      auto shelfino_remover_node = rclcpp::Node::make_shared("shelfino_remover_node");
+      auto shelfino_remover = shelfino_remover_node->create_client<gazebo_msgs::srv::DeleteEntity>(GAZEBO_DELETE_SERVICE);
+      debug("waiting for the service...");
+      while (!shelfino_remover->wait_for_service(1s)){
+        if (!rclcpp::ok()){
+          err("Interrupted while waiting for the service "+GAZEBO_DELETE_SERVICE);
+          return delete_result;
+        }
+        debug("service not available, waiting again...");
+      }
+      auto remove_request = std::make_shared<gazebo_msgs::srv::DeleteEntity_Request>();
+      std::string shelfino_name = "shelfino"+std::to_string(shelfino_id);
+      remove_request->name = shelfino_name.c_str();
+      debug("Trying to delete "+shelfino_name);
+      auto remove_result = shelfino_remover->async_send_request(remove_request);
+      if (rclcpp::spin_until_future_complete(shelfino_remover_node, remove_result) == rclcpp::FutureReturnCode::SUCCESS){
+        auto result = remove_result.get();
+        if(result->success){
+          log(result->status_message);
+          delete_result = true;
+        }else{
+          err(result->status_message);
+        }
+      }else{
+        err("Service call failed.");
+      }
+      return delete_result;
+    }
+
+    bool shutdown_shelfino_transform(int shelfino_id){
+      std::string TRANSFORM_SERVICE = "/shelfino"+std::to_string(shelfino_id)+"/shutdown";
+      bool shutdown_result = false;
+
+      auto transform_remover_node = rclcpp::Node::make_shared("transform_remover_node");
+      auto transform_remover = transform_remover_node->create_client<std_srvs::srv::Empty>(TRANSFORM_SERVICE);
+
+      while (!transform_remover->wait_for_service(1s)){
+        if (!rclcpp::ok()){
+          err("Interrupted while waiting for the service "+TRANSFORM_SERVICE);
+          return shutdown_result;
+        }
+        debug("service not available, waiting again...");
+      }
+      auto empty = std::make_shared<std_srvs::srv::Empty_Request>();
+      auto empty_res = transform_remover->async_send_request(empty);
+      if (rclcpp::spin_until_future_complete(transform_remover_node, empty_res) == rclcpp::FutureReturnCode::SUCCESS){
+        log("Transform shutdown");
+        shutdown_result = true;
+      }else{
+        err("Transform shutdown error.");
+      }
+      return shutdown_result;
+    }
 };
 
 int main(int argc, char * argv[])

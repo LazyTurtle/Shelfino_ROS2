@@ -63,9 +63,9 @@ def generate_launch_description():
             arguments=['-file', LaunchConfiguration('model'),
                        '-entity', 'shelfino1',
                        '-robot_namespace', 'shelfino1',
-                       '-x', '4',
-                       '-y', '1',
-                       '-Y', '1']
+                       '-x', '0.2',
+                       '-y', '2.3',
+                       '-Y', '0.6']
         ),
 
         Node(
@@ -74,9 +74,9 @@ def generate_launch_description():
             arguments=['-file', LaunchConfiguration('model'),
                        '-entity', 'shelfino2',
                        '-robot_namespace', 'shelfino2',
-                       '-x', '1',
-                       '-y', '-1',
-                       '-Y', '0.7']
+                       '-x', '4.5',
+                       '-y', '0',
+                       '-Y', '2.0']
         ),
 
         Node(
@@ -85,9 +85,9 @@ def generate_launch_description():
             arguments=['-file', LaunchConfiguration('model'),
                        '-entity', 'shelfino3',
                        '-robot_namespace', 'shelfino3',
-                       '-x', '4.5',
-                       '-y', '-4',
-                       '-Y', '1.8']
+                       '-x', '1.5',
+                       '-y', '-3',
+                       '-Y', '0.8']
         ),
 
         IncludeLaunchDescription(
