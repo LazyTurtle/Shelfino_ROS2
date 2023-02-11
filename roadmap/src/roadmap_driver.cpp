@@ -115,9 +115,20 @@ class RobotDriver : public rclcpp::Node
       const std::shared_ptr<roadmap_interfaces::srv::DriverService_Request> request,
       std::shared_ptr<roadmap_interfaces::srv::DriverService_Response> response){
       log("Requested the best path.");
-      path_length = get_path();
-      response->length = path_length;
-      response->result = (path_length>=0.0)? true : false;
+      if(self_shelfino_exist()){
+        path_length = get_path();
+        response->length = path_length;
+        response->result = (path_length>=0.0) ? true : false;
+      }else{
+        err("Shelfino does not exist");
+        response->result = false;
+      }
+    }
+
+    bool self_shelfino_exist(){
+      auto t = obtain_transform_of_shelfino(robot_id);
+      bool shelfino_exist = (t.header.frame_id.empty()) ? false : true;
+      return shelfino_exist;
     }
 
     void evacuate(
@@ -353,7 +364,7 @@ class RobotDriver : public rclcpp::Node
       bool obtained = rclcpp::wait_for_message(t,sub, this->get_node_options().context(), 1s);
       if(obtained){
         log("found transform for shelfino"+std::to_string(shelfino_id));
-      }{
+      }else{
         err("Transform for shelfino"+std::to_string(shelfino_id)+" not found");
       }
 
