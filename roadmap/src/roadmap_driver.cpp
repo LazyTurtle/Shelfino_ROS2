@@ -36,9 +36,6 @@ class RobotDriver : public rclcpp::Node
       gates_subscriber = this->create_subscription<geometry_msgs::msg::PoseArray>(
         GATES_TOPIC, qos, std::bind(&RobotDriver::set_gates, this, _1));
     
-      robot_position_subscriber = this->create_subscription<geometry_msgs::msg::TransformStamped>(
-        ROBOT_POSITION_TOPIC, qos, std::bind(&RobotDriver::set_robot_position, this, _1));
-
       best_path_service = this->create_service<roadmap_interfaces::srv::DriverService>(
         FIND_BEST_PATH_SERVICE, std::bind(&RobotDriver::find_best_path, this, _1, _2));
 
@@ -83,7 +80,6 @@ class RobotDriver : public rclcpp::Node
     rclcpp::Subscription<geometry_msgs::msg::TransformStamped>::SharedPtr robot_position_subscriber;
 
     std::shared_ptr<geometry_msgs::msg::PoseArray> gates;
-    std::shared_ptr<geometry_msgs::msg::TransformStamped> robot_position;
 
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher;
 
@@ -101,10 +97,6 @@ class RobotDriver : public rclcpp::Node
     
     void set_gates(const geometry_msgs::msg::PoseArray::SharedPtr msg){
       gates = msg;
-    }
-
-    void set_robot_position(const geometry_msgs::msg::TransformStamped::SharedPtr msg){
-      robot_position = msg;
     }
 
     int get_robot_id(){
@@ -140,10 +132,6 @@ class RobotDriver : public rclcpp::Node
         err("Gates pointer is null");
         return -1.0;
       }
-      if(!robot_position){
-        err("The robot position is null");
-        return -1.0;
-      }
 
       auto length_of_path = [](const nav_msgs::msg::Path& path){
         double length = 0.0;
@@ -163,6 +151,12 @@ class RobotDriver : public rclcpp::Node
       std::vector<nav_msgs::msg::Path> possible_paths;
       auto obstacles = obstacles_from_robots();
 
+      auto robot_position = obtain_transform_of_shelfino(robot_id);
+
+      // the robot does not exist anymore
+      if(robot_position.header.frame_id.empty())
+        return -1.0;
+
       for(auto gate:gates->poses){
         {
           std::ostringstream s;
@@ -172,9 +166,9 @@ class RobotDriver : public rclcpp::Node
 
         auto req = std::make_shared<roadmap_interfaces::srv::PathService::Request>();
 
-        req->start.x = robot_position->transform.translation.x;
-        req->start.y = robot_position->transform.translation.y;
-        req->start.z = robot_position->transform.translation.z;
+        req->start.x = robot_position.transform.translation.x;
+        req->start.y = robot_position.transform.translation.y;
+        req->start.z = robot_position.transform.translation.z;
 
         req->end.x = gate.position.x;
         req->end.y = gate.position.y;
@@ -186,7 +180,7 @@ class RobotDriver : public rclcpp::Node
         req->obstacles = obstacles;
 
         tf2::Quaternion q;
-        tf2::fromMsg(robot_position->transform.rotation, q);
+        tf2::fromMsg(robot_position.transform.rotation, q);
         tf2::Matrix3x3 m(q);
         double roll, pitch, yaw;
         m.getEulerYPR(yaw, pitch, roll);
@@ -305,19 +299,9 @@ class RobotDriver : public rclcpp::Node
       for(int i = 0; i<N_ROBOTS+1; i++){
         if(i == robot_id)
           continue;
-        geometry_msgs::msg::TransformStamped t;
-        std::string topic_name = "/shelfino"+std::to_string(i)+"/transform";
-        log("Looking for topic:"+topic_name);
-
-        // this is necessary if we want to use qos
-        std::shared_ptr<rclcpp::Subscription<geometry_msgs::msg::TransformStamped>>
-         sub = this->create_subscription<geometry_msgs::msg::TransformStamped>
-          (topic_name,qos,[](const std::shared_ptr<const geometry_msgs::msg::TransformStamped>){});
-
-        bool obtained = rclcpp::wait_for_message(t,sub, this->get_node_options().context(), 1s);
-        if(obtained){
+        auto t = obtain_transform_of_shelfino(i);
+        if(!t.header.frame_id.empty()){
           transforms.push_back(t);
-          log("found transform for shelfino"+std::to_string(i));
         }
       }
       log("Found "+std::to_string(transforms.size())+" transforms.");
@@ -326,35 +310,55 @@ class RobotDriver : public rclcpp::Node
 
     geometry_msgs::msg::Polygon create_square(
       const geometry_msgs::msg::TransformStamped transform, const double robot_width){
-        geometry_msgs::msg::Polygon p;
-        double h = (robot_width/2.0);
-        const double x = transform.transform.translation.x;
-        const double y = transform.transform.translation.y;
-        tf2::Quaternion q;
-        tf2::fromMsg(transform.transform.rotation, q);
-        tf2::Matrix3x3 m(q);
-        double roll, pitch, yaw;
-        m.getEulerYPR(yaw, pitch, roll);
-        std::vector<geometry_msgs::msg::Point32> points(4);
-        points[0].x = h*std::cos(yaw) - h*std::sin(yaw) +x;
-        points[0].y = h*std::sin(yaw) + h*std::cos(yaw) +y;
-        points[1].x = -h*std::cos(yaw) - h*std::sin(yaw) +x;
-        points[1].y = -h*std::sin(yaw) + h*std::cos(yaw) +y;
-        points[2].x = -h*std::cos(yaw) - (-h)*std::sin(yaw) +x;
-        points[2].y = -h*std::sin(yaw) + (-h)*std::cos(yaw) +y;
-        points[3].x = h*std::cos(yaw) - (-h)*std::sin(yaw) +x;
-        points[3].y = h*std::sin(yaw) + (-h)*std::cos(yaw) +y;
-        
-        p.points = points;
+      geometry_msgs::msg::Polygon p;
+      double h = (robot_width/2.0);
+      const double x = transform.transform.translation.x;
+      const double y = transform.transform.translation.y;
+      tf2::Quaternion q;
+      tf2::fromMsg(transform.transform.rotation, q);
+      tf2::Matrix3x3 m(q);
+      double roll, pitch, yaw;
+      m.getEulerYPR(yaw, pitch, roll);
+      std::vector<geometry_msgs::msg::Point32> points(4);
+      points[0].x = h*std::cos(yaw) - h*std::sin(yaw) +x;
+      points[0].y = h*std::sin(yaw) + h*std::cos(yaw) +y;
+      points[1].x = -h*std::cos(yaw) - h*std::sin(yaw) +x;
+      points[1].y = -h*std::sin(yaw) + h*std::cos(yaw) +y;
+      points[2].x = -h*std::cos(yaw) - (-h)*std::sin(yaw) +x;
+      points[2].y = -h*std::sin(yaw) + (-h)*std::cos(yaw) +y;
+      points[3].x = h*std::cos(yaw) - (-h)*std::sin(yaw) +x;
+      points[3].y = h*std::sin(yaw) + (-h)*std::cos(yaw) +y;
+      
+      p.points = points;
 
-        for(auto po:points){
-          std::ostringstream s;
-          s<<"x:"<<po.x<<" y:"<<po.y;
-          debug(s.str());
-        }
-        
-        return p;
+      for(auto po:points){
+        std::ostringstream s;
+        s<<"x:"<<po.x<<" y:"<<po.y;
+        debug(s.str());
       }
+      
+      return p;
+    }
+    geometry_msgs::msg::TransformStamped obtain_transform_of_shelfino(int shelfino_id){
+      auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
+      geometry_msgs::msg::TransformStamped t;
+      std::string topic_name = "/shelfino"+std::to_string(shelfino_id)+"/transform";
+      log("Looking for topic:"+topic_name);
+
+      // this is necessary if we want to use qos
+      std::shared_ptr<rclcpp::Subscription<geometry_msgs::msg::TransformStamped>>
+        sub = this->create_subscription<geometry_msgs::msg::TransformStamped>
+        (topic_name,qos,[](const std::shared_ptr<const geometry_msgs::msg::TransformStamped>){});
+
+      bool obtained = rclcpp::wait_for_message(t,sub, this->get_node_options().context(), 1s);
+      if(obtained){
+        log("found transform for shelfino"+std::to_string(shelfino_id));
+      }{
+        err("Transform for shelfino"+std::to_string(shelfino_id)+" not found");
+      }
+
+      return t;
+    }
 
 };
 

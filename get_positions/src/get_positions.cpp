@@ -12,8 +12,10 @@
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_listener.h"
 #include "geometry_msgs/msg/transform_stamped.h"
+#include "std_srvs/srv/empty.hpp"
 
 using std::placeholders::_1;
+using std::placeholders::_2;
 using namespace std::chrono_literals;
 
 class PositionListener : public rclcpp::Node
@@ -31,6 +33,8 @@ class PositionListener : public rclcpp::Node
       publisher_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("transform", qos);
       timer_ = this->create_wall_timer(
       500ms, std::bind(&PositionListener::timer_callback, this));
+      shutdown_srv = this->create_service<std_srvs::srv::Empty>(
+        "shutdown", std::bind(&PositionListener::deactivate, this, _1, _2));
     }
 
   private:
@@ -47,10 +51,21 @@ class PositionListener : public rclcpp::Node
       }
       publisher_->publish(t);
     }
+
+    void deactivate(
+      const std::shared_ptr<std_srvs::srv::Empty_Request> request,
+      std::shared_ptr<std_srvs::srv::Empty_Response> response){
+
+      timer_ = nullptr;
+      publisher_= nullptr;
+      std::string s = "Get position deactivated";
+      rclcpp::shutdown(this->get_node_options().context(), s);
+    }
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
     std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr publisher_;
+    rclcpp::Service<std_srvs::srv::Empty>::SharedPtr shutdown_srv;
     size_t count_;
 };
 
