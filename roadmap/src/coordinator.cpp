@@ -14,6 +14,7 @@
 #include "nav_msgs/msg/path.hpp"
 #include "nav2_msgs/action/follow_path.hpp"
 #include "roadmap_interfaces/srv/driver_service.hpp"
+#include "roadmap_interfaces/action/evacuate.hpp"
 #include "gazebo_msgs/srv/delete_model.hpp"
 #include "gazebo_msgs/srv/delete_entity.hpp"
 
@@ -29,7 +30,7 @@ class Coordinator : public rclcpp::Node
     Coordinator()
     : Node("robot_coordinator"){
       coordinator_service = this->create_service<std_srvs::srv::Empty>(
-        COORDINATOR_SERVICE, std::bind(&Coordinator::coordinate_safe_evacuation, this, _1, _2));
+        COORDINATOR_SERVICE, std::bind(&Coordinator::coordinate_unsafe_ecacuation, this, _1, _2));
       
       number_of_gates = get_number_of_gates();
       log("Ready.");
@@ -76,7 +77,7 @@ class Coordinator : public rclcpp::Node
       auto sub = this->create_subscription<geometry_msgs::msg::PoseArray>
         (topic_name,qos,[](const std::shared_ptr<const geometry_msgs::msg::PoseArray>){});
 
-      bool obtained = rclcpp::wait_for_message(gates,sub, this->get_node_options().context(), 1s);
+      bool obtained = rclcpp::wait_for_message(gates,sub, this->get_node_options().context());
       if(obtained){
         debug("Gates found.");
         n = gates.poses.size();
@@ -100,12 +101,27 @@ class Coordinator : public rclcpp::Node
       };
       
       find_lengths(false);
+      auto client_node = rclcpp::Node::make_shared("unsafe_evacuation");
+      log("Start coordinating for each gate");
       for(int i=0; i<number_of_gates; i++){
+        log("Looking at the line for gate "+std::to_string(i));
         std::vector<int>robots_to_this_gate = find_all_robots_assigned_to_gate(i);
-        std::sort(robots_to_this_gate.begin(), robots_to_this_gate.end(), [this](int i, int j){
-          return path_lengths[i]<path_lengths[j];});
+        std::sort(robots_to_this_gate.begin(), robots_to_this_gate.end(), [this](int i, int j){return path_lengths[i]<path_lengths[j];});
+
         for(int i=0;i<robots_to_this_gate.size();i++){
+          log("Looking for shelfino "+std::to_string(robots_to_this_gate[i]));
+          std::string address = "/shelfino"+std::to_string(robots_to_this_gate[i])+"/action_evacuate";
+          auto unsafe_evacuation_client = rclcpp_action::create_client
+            <roadmap_interfaces::action::Evacuate>(client_node, address);
           
+          if(!unsafe_evacuation_client->wait_for_action_server(1s)){
+            err("Action server not found for "+std::to_string(robots_to_this_gate[i]));
+            continue;
+          }
+          auto goal = roadmap_interfaces::action::Evacuate_Goal();
+          goal.delay = i*3.0;
+          log("Sending goal.");
+          unsafe_evacuation_client->async_send_goal(goal);
         }
       }
     }

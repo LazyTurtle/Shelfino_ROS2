@@ -52,7 +52,7 @@ class RobotDriver : public rclcpp::Node
       timer = this->create_wall_timer(publishers_period, std::bind(&RobotDriver::publish, this));
 
       this->action_server_ = rclcpp_action::create_server<roadmap_interfaces::action::Evacuate>(
-      this, "fibonacci",
+      this, "action_evacuate",
       std::bind(&RobotDriver::handle_evacuation_goal, this, _1, _2),
       std::bind(&RobotDriver::handle_cancel, this, _1),
       std::bind(&RobotDriver::handle_accepted, this, _1));
@@ -296,6 +296,7 @@ class RobotDriver : public rclcpp::Node
 
       switch (wrapped_result.code) {
         case rclcpp_action::ResultCode::SUCCEEDED:
+          log("Goal reached.");
           break;
         case rclcpp_action::ResultCode::ABORTED:
           err("Goal was aborted");
@@ -307,7 +308,6 @@ class RobotDriver : public rclcpp::Node
           err("Unknown result code");
           return;
       }
-      log("Goal reached.");
     }
     
     std::vector<geometry_msgs::msg::Polygon> obstacles_from_robots(){
@@ -394,8 +394,8 @@ class RobotDriver : public rclcpp::Node
         debug("Goal acepted");
         if(goal->path.poses.size()>0){
           path = std::make_shared<nav_msgs::msg::Path>(goal->path);
-          start_delay = goal->delay;
         }
+        start_delay = goal->delay;
         
         (void)uuid;
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
@@ -403,18 +403,28 @@ class RobotDriver : public rclcpp::Node
 
     rclcpp_action::CancelResponse handle_cancel(const 
       std::shared_ptr<rclcpp_action::ServerGoalHandle<roadmap_interfaces::action::Evacuate>> goal_handle){
-
+      log("Received signal to cancel evacuate");
+      // I'm not actually doing anything, I have no idea how to wrap it around
+      // the follow action server is bugged anyway and doesn't really work properly
+      (void)goal_handle;
+      return rclcpp_action::CancelResponse::ACCEPT;
     }
 
     void handle_accepted(const 
       std::shared_ptr<rclcpp_action::ServerGoalHandle<roadmap_interfaces::action::Evacuate>> goal_handle){
-      
       std::thread{std::bind(&RobotDriver::execute_action_evacuate, this, _1), goal_handle}.detach();
     }
 
     void execute_action_evacuate(const 
       std::shared_ptr<rclcpp_action::ServerGoalHandle<roadmap_interfaces::action::Evacuate>> goal_handle){
-
+      log("Start executing ecavuation action");
+      if(start_delay > 0.0){
+        log("Sleep for "+std::to_string(start_delay)+" seconds...");
+        auto sleep = 1000ms * start_delay;
+        rclcpp::sleep_for(std::chrono::duration_cast<std::chrono::nanoseconds>(sleep));
+        log("Wake up.");
+      }
+      follow_path();
     }
 
 };
