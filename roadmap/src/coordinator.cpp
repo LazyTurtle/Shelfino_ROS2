@@ -30,6 +30,8 @@ class Coordinator : public rclcpp::Node
     : Node("robot_coordinator"){
       coordinator_service = this->create_service<std_srvs::srv::Empty>(
         COORDINATOR_SERVICE, std::bind(&Coordinator::coordinate_safe_evacuation, this, _1, _2));
+      
+      number_of_gates = get_number_of_gates();
       log("Ready.");
     }
 
@@ -38,13 +40,16 @@ class Coordinator : public rclcpp::Node
     const std::string FIND_BEST_PATH_SERVICE = "find_best_path";
     const std::string EVACUATE_SERVICE = "evacuate";
     const std::string GAZEBO_DELETE_SERVICE = "/delete_entity";
+    const int N_ROBOTS = 3;
+
+    int number_of_gates;
 
     rclcpp::TimerBase::SharedPtr timer;
-    const int N_ROBOTS = 3;
+    std::vector<rclcpp::TimerBase::SharedPtr> timers;
     std::map<int,double> path_lengths;
     std::map<int,int> shelfino_gate_assignment;
-    bool bCoordinate = false;
-    
+
+
     rclcpp::Service<std_srvs::srv::Empty>::SharedPtr coordinator_service;
 
     void debug(std::string log){
@@ -59,23 +64,50 @@ class Coordinator : public rclcpp::Node
       RCLCPP_ERROR(this->get_logger(), log.c_str());
     }
 
+    int get_number_of_gates(){
+      int n = -1;
+      auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
+      log("looking for the number of gates.");
+      geometry_msgs::msg::PoseArray gates;
+      std::string topic_name = "/gate_position";
+      debug("Looking for topic:"+topic_name);
+
+      // this is necessary if we want to use qos
+      auto sub = this->create_subscription<geometry_msgs::msg::PoseArray>
+        (topic_name,qos,[](const std::shared_ptr<const geometry_msgs::msg::PoseArray>){});
+
+      bool obtained = rclcpp::wait_for_message(gates,sub, this->get_node_options().context(), 1s);
+      if(obtained){
+        debug("Gates found.");
+        n = gates.poses.size();
+      }else{
+        err("Error upon waiting for a message about the gates");
+      }
+      log("Number of gates "+std::to_string(n));
+      return n;
+    }
+
     void coordinate_unsafe_ecacuation(
       const std::shared_ptr<std_srvs::srv::Empty_Request> request,
       std::shared_ptr<std_srvs::srv::Empty_Response> response){
-      auto min_key = [](const std::map<int,double>& map){
-        double min_value = std::numeric_limits<double>().infinity();
-        int key;
-        for(auto pair:map){
-          if(min_value>pair.second){
-            min_value = pair.second;
-            key = pair.first;
-          }
+      auto find_all_robots_assigned_to_gate = [this](int gate_id){
+        std::vector<int> v;
+        for(auto const& pair:shelfino_gate_assignment){
+          if(pair.second == gate_id)
+            v.push_back(pair.first);
         }
-        return key;
+        return v;
       };
-
-
-
+      
+      find_lengths(false);
+      for(int i=0; i<number_of_gates; i++){
+        std::vector<int>robots_to_this_gate = find_all_robots_assigned_to_gate(i);
+        std::sort(robots_to_this_gate.begin(), robots_to_this_gate.end(), [this](int i, int j){
+          return path_lengths[i]<path_lengths[j];});
+        for(int i=0;i<robots_to_this_gate.size();i++){
+          
+        }
+      }
     }
 
     void coordinate_safe_evacuation(
@@ -117,10 +149,10 @@ class Coordinator : public rclcpp::Node
           err("Interrupted while waiting for the service "+shelfino_service);
           return;
         }
-        log("service not available, waiting again...");
+        err("service not available, waiting again...");
       }
 
-      log("Requesting evacuate service from driver "+std::to_string(shelfino_id));
+      debug("Requesting evacuate service from driver "+std::to_string(shelfino_id));
       auto r = std::make_shared<std_srvs::srv::Empty_Request>();
       auto result = client->async_send_request(r);
       if (rclcpp::spin_until_future_complete(client_node, result) == rclcpp::FutureReturnCode::SUCCESS){

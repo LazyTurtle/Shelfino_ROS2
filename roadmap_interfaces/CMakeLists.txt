@@ -17,9 +17,13 @@ set(srv_files
   "srv/PathService.srv"
   "srv/DriverService.srv"
 )
+set(action_files
+  "action/Evacuate.action"
+)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   ${srv_files}
+  ${action_files}
   DEPENDENCIES builtin_interfaces geometry_msgs std_msgs nav_msgs
   ADD_LINTER_TESTS
 )

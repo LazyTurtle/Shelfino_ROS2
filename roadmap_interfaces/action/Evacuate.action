@@ -1,0 +1,11 @@
+# Request
+nav_msgs/Path path
+float64 delay
+---
+# Result
+std_msgs/Empty result
+uint16 error_code
+---
+# Feedback
+float32 distance_to_goal
+float32 speed
