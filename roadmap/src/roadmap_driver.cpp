@@ -2,6 +2,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <thread>
 
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
@@ -14,6 +15,8 @@
 #include "nav2_msgs/action/follow_path.hpp"
 #include "roadmap_interfaces/srv/path_service.hpp"
 #include "roadmap_interfaces/srv/driver_service.hpp"
+#include "roadmap_interfaces/action/evacuate.hpp"
+
 
 using std::placeholders::_1;
 using std::placeholders::_2;
@@ -26,6 +29,7 @@ class RobotDriver : public rclcpp::Node
     std::shared_ptr<nav_msgs::msg::Path> path;
     double path_length;
     int gate_id;
+    double start_delay = -1.0;
 
 
     RobotDriver()
@@ -46,6 +50,12 @@ class RobotDriver : public rclcpp::Node
       path_publisher = this->create_publisher<nav_msgs::msg::Path>(PATH_TOPIC, qos);
 
       timer = this->create_wall_timer(publishers_period, std::bind(&RobotDriver::publish, this));
+
+      this->action_server_ = rclcpp_action::create_server<roadmap_interfaces::action::Evacuate>(
+      this, "fibonacci",
+      std::bind(&RobotDriver::handle_evacuation_goal, this, _1, _2),
+      std::bind(&RobotDriver::handle_cancel, this, _1),
+      std::bind(&RobotDriver::handle_accepted, this, _1));
       
       robot_id = get_robot_id();
       log("Driver "+std::to_string(robot_id)+" ready.");
@@ -76,6 +86,7 @@ class RobotDriver : public rclcpp::Node
 
     rclcpp_action::Client<nav2_msgs::action::FollowPath>::SharedPtr follow_path_client;
 
+    rclcpp_action::Server<roadmap_interfaces::action::Evacuate>::SharedPtr action_server_;
 
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr gates_subscriber;
     rclcpp::Subscription<geometry_msgs::msg::TransformStamped>::SharedPtr robot_position_subscriber;
@@ -375,6 +386,35 @@ class RobotDriver : public rclcpp::Node
       }
 
       return t;
+    }
+
+    rclcpp_action::GoalResponse handle_evacuation_goal(
+      const rclcpp_action::GoalUUID & uuid,
+      std::shared_ptr<const roadmap_interfaces::action::Evacuate_Goal> goal){
+        debug("Goal acepted");
+        if(goal->path.poses.size()>0){
+          path = std::make_shared<nav_msgs::msg::Path>(goal->path);
+          start_delay = goal->delay;
+        }
+        
+        (void)uuid;
+        return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+    }
+
+    rclcpp_action::CancelResponse handle_cancel(const 
+      std::shared_ptr<rclcpp_action::ServerGoalHandle<roadmap_interfaces::action::Evacuate>> goal_handle){
+
+    }
+
+    void handle_accepted(const 
+      std::shared_ptr<rclcpp_action::ServerGoalHandle<roadmap_interfaces::action::Evacuate>> goal_handle){
+      
+      std::thread{std::bind(&RobotDriver::execute_action_evacuate, this, _1), goal_handle}.detach();
+    }
+
+    void execute_action_evacuate(const 
+      std::shared_ptr<rclcpp_action::ServerGoalHandle<roadmap_interfaces::action::Evacuate>> goal_handle){
+
     }
 
 };
