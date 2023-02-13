@@ -29,7 +29,7 @@ class Coordinator : public rclcpp::Node
     Coordinator()
     : Node("robot_coordinator"){
       coordinator_service = this->create_service<std_srvs::srv::Empty>(
-        COORDINATOR_SERVICE, std::bind(&Coordinator::coordinate_evacuation, this, _1, _2));
+        COORDINATOR_SERVICE, std::bind(&Coordinator::coordinate_safe_evacuation, this, _1, _2));
       log("Ready.");
     }
 
@@ -42,6 +42,7 @@ class Coordinator : public rclcpp::Node
     rclcpp::TimerBase::SharedPtr timer;
     const int N_ROBOTS = 3;
     std::map<int,double> path_lengths;
+    std::map<int,int> shelfino_gate_assignment;
     bool bCoordinate = false;
     
     rclcpp::Service<std_srvs::srv::Empty>::SharedPtr coordinator_service;
@@ -58,7 +59,26 @@ class Coordinator : public rclcpp::Node
       RCLCPP_ERROR(this->get_logger(), log.c_str());
     }
 
-    void coordinate_evacuation(
+    void coordinate_unsafe_ecacuation(
+      const std::shared_ptr<std_srvs::srv::Empty_Request> request,
+      std::shared_ptr<std_srvs::srv::Empty_Response> response){
+      auto min_key = [](const std::map<int,double>& map){
+        double min_value = std::numeric_limits<double>().infinity();
+        int key;
+        for(auto pair:map){
+          if(min_value>pair.second){
+            min_value = pair.second;
+            key = pair.first;
+          }
+        }
+        return key;
+      };
+
+
+
+    }
+
+    void coordinate_safe_evacuation(
       const std::shared_ptr<std_srvs::srv::Empty_Request> request,
       std::shared_ptr<std_srvs::srv::Empty_Response> response){
       log("Start coordinated evacuation.");
@@ -112,7 +132,7 @@ class Coordinator : public rclcpp::Node
       }
     }
 
-    void find_lengths(){
+    void find_lengths(bool consider_other_robots = true){
       log("Find minimum path lengths");
       path_lengths.clear();
       std::shared_ptr<rclcpp::Node> client_node = rclcpp::Node::make_shared("coordinator_find_path_client");
@@ -127,13 +147,15 @@ class Coordinator : public rclcpp::Node
         }
         log("Requesting path length from driver "+std::to_string(i));
         auto r = std::make_shared<roadmap_interfaces::srv::DriverService_Request>();
+        r->look_for_robots = consider_other_robots;
         auto result = client->async_send_request(r);
 
         if (rclcpp::spin_until_future_complete(client_node, result) == rclcpp::FutureReturnCode::SUCCESS){
           auto res = result.get();
           if(res->result && res->length>0.0){
             path_lengths[i] = res->length;
-            log("Path length obtained: "+std::to_string(res->length));
+            shelfino_gate_assignment[i] = res->gate_id;
+            log("Path length to "+std::to_string(res->gate_id)+" gate obtained: "+std::to_string(res->length));
           }
           else{
             err("There was no availabe path.");

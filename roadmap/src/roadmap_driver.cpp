@@ -25,6 +25,7 @@ class RobotDriver : public rclcpp::Node
   public:
     std::shared_ptr<nav_msgs::msg::Path> path;
     double path_length;
+    int gate_id;
 
 
     RobotDriver()
@@ -116,9 +117,11 @@ class RobotDriver : public rclcpp::Node
       std::shared_ptr<roadmap_interfaces::srv::DriverService_Response> response){
       log("Requested the best path.");
       if(self_shelfino_exist()){
-        path_length = get_path();
+
+        path_length = get_path(request->look_for_robots);
         response->length = path_length;
         response->result = (path_length>=0.0) ? true : false;
+        response->gate_id = gate_id;
       }else{
         err("Shelfino does not exist");
         response->result = false;
@@ -127,7 +130,7 @@ class RobotDriver : public rclcpp::Node
 
     bool self_shelfino_exist(){
       auto t = obtain_transform_of_shelfino(robot_id);
-      bool shelfino_exist = (t.header.frame_id.empty()) ? false : true;
+      bool shelfino_exist = (!t.header.frame_id.empty());
       return shelfino_exist;
     }
 
@@ -137,7 +140,7 @@ class RobotDriver : public rclcpp::Node
         follow_path();
       }
 
-    double get_path(){
+    double get_path(bool look_for_robots = true){
       
       if(!gates){
         err("Gates pointer is null");
@@ -160,7 +163,9 @@ class RobotDriver : public rclcpp::Node
       auto client = client_node->create_client<roadmap_interfaces::srv::PathService>(ROADMAP_SERVICE_NAME);
       
       std::vector<nav_msgs::msg::Path> possible_paths;
-      auto obstacles = obstacles_from_robots();
+      std::vector<geometry_msgs::msg::Polygon> obstacles = (look_for_robots)?
+        obstacles_from_robots():
+        std::vector<geometry_msgs::msg::Polygon>();
 
       auto robot_position = obtain_transform_of_shelfino(robot_id);
 
@@ -168,7 +173,7 @@ class RobotDriver : public rclcpp::Node
       if(robot_position.header.frame_id.empty())
         return -1.0;
 
-      for(auto gate:gates->poses){
+      for(auto const& gate:gates->poses){
         {
           std::ostringstream s;
           s<<"Lookign for path to x:"<<gate.position.x<<" y:"<<gate.position.y;
@@ -228,6 +233,7 @@ class RobotDriver : public rclcpp::Node
       int min_index = std::distance(lengths.begin(), min_itr);
 
       path = std::make_shared<nav_msgs::msg::Path>(possible_paths[min_index]);
+      gate_id = min_index;
       double p_length = lengths[min_index];
       log("Shortest path obtained.");
       return p_length;
