@@ -32,8 +32,8 @@ class RobotDriver : public rclcpp::Node
     double start_delay = -1.0;
 
 
-    RobotDriver()
-    : Node("robot_driver"){}
+    RobotDriver(const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
+  : Node("robot_driver", options){}
 
     void init(){
       const auto qos = rclcpp::QoS(rclcpp::KeepLast(1), rmw_qos_profile_sensor_data);
@@ -225,7 +225,6 @@ class RobotDriver : public rclcpp::Node
 
         if (rclcpp::spin_until_future_complete(client_node, result) == rclcpp::FutureReturnCode::SUCCESS){
           auto res = result.get();
-
           if(res->result)
             possible_paths.push_back(res->path);
           else
@@ -425,6 +424,11 @@ class RobotDriver : public rclcpp::Node
         log("Wake up.");
       }
       follow_path();
+      log("Ended follow path action");
+      auto result = std::make_shared<roadmap_interfaces::action::Evacuate_Result>();
+      result->shelfino_id = robot_id;
+      goal_handle->succeed(result);
+      log("----------End.");
     }
 
 };

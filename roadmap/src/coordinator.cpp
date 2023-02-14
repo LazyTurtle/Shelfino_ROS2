@@ -50,6 +50,7 @@ class Coordinator : public rclcpp::Node
     std::map<int,double> path_lengths;
     std::map<int,int> shelfino_gate_assignment;
 
+    std::vector<rclcpp_action::Client<roadmap_interfaces::action::Evacuate>::SharedPtr> action_clients;
 
     rclcpp::Service<std_srvs::srv::Empty>::SharedPtr coordinator_service;
 
@@ -99,7 +100,7 @@ class Coordinator : public rclcpp::Node
         }
         return v;
       };
-      
+      action_clients.clear();
       find_lengths(false);
       auto client_node = rclcpp::Node::make_shared("unsafe_evacuation");
       log("Start coordinating for each gate");
@@ -112,7 +113,8 @@ class Coordinator : public rclcpp::Node
           log("Looking for shelfino "+std::to_string(robots_to_this_gate[i]));
           std::string address = "/shelfino"+std::to_string(robots_to_this_gate[i])+"/action_evacuate";
           auto unsafe_evacuation_client = rclcpp_action::create_client
-            <roadmap_interfaces::action::Evacuate>(client_node, address);
+            <roadmap_interfaces::action::Evacuate>(this, address);
+          action_clients.push_back(unsafe_evacuation_client);
           
           if(!unsafe_evacuation_client->wait_for_action_server(1s)){
             err("Action server not found for "+std::to_string(robots_to_this_gate[i]));
@@ -121,9 +123,17 @@ class Coordinator : public rclcpp::Node
           auto goal = roadmap_interfaces::action::Evacuate_Goal();
           goal.delay = i*3.0;
           log("Sending goal.");
-          unsafe_evacuation_client->async_send_goal(goal);
+          auto goal_options = rclcpp_action::Client<roadmap_interfaces::action::Evacuate>::SendGoalOptions();
+          goal_options.result_callback = std::bind(&Coordinator::ending_callback, this, _1);
+          unsafe_evacuation_client->async_send_goal(goal, goal_options);
         }
       }
+    }
+
+    void ending_callback(const rclcpp_action::ClientGoalHandle<roadmap_interfaces::action::Evacuate>::WrappedResult& result){
+      log("Results coming");
+      delete_shelfino(result.result->shelfino_id);
+      shutdown_shelfino_transform(result.result->shelfino_id);
     }
 
     void coordinate_safe_evacuation(
