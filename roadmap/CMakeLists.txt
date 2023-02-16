@@ -20,6 +20,7 @@ find_package(dubins_planner REQUIRED)
 find_package(dubins_planner_msgs REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(rclcpp_action REQUIRED)
+find_package(rclcpp_components REQUIRED)
 find_package(gazebo_msgs REQUIRED)
 
 include_directories(include)
@@ -48,6 +49,7 @@ ament_target_dependencies(driver
   nav_msgs
   nav2_msgs
   rclcpp_action
+  rclcpp_components
 )
 add_executable(coordinator src/coordinator.cpp)
 ament_target_dependencies(coordinator

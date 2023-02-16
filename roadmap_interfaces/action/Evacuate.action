@@ -1,0 +1,7 @@
+# Request
+nav_msgs/Path path
+float64 delay -1.0
+---
+# Result
+int32 shelfino_id
+---
