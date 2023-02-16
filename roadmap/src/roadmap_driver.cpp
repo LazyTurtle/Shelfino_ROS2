@@ -428,7 +428,6 @@ class RobotDriver : public rclcpp::Node
       auto result = std::make_shared<roadmap_interfaces::action::Evacuate_Result>();
       result->shelfino_id = robot_id;
       goal_handle->succeed(result);
-      log("----------End.");
     }
 
 };

@@ -42,6 +42,8 @@ class Coordinator : public rclcpp::Node
     const std::string EVACUATE_SERVICE = "evacuate";
     const std::string GAZEBO_DELETE_SERVICE = "/delete_entity";
     const int N_ROBOTS = 3;
+    const double SAFE_DISTANCE = 1.5; // in meters
+    const double ROBOT_SPEED = 0.3; // in meters/s
 
     int number_of_gates;
 
@@ -107,7 +109,8 @@ class Coordinator : public rclcpp::Node
       for(int i=0; i<number_of_gates; i++){
         log("Looking at the line for gate "+std::to_string(i));
         std::vector<int>robots_to_this_gate = find_all_robots_assigned_to_gate(i);
-        std::sort(robots_to_this_gate.begin(), robots_to_this_gate.end(), [this](int i, int j){return path_lengths[i]<path_lengths[j];});
+        std::sort(robots_to_this_gate.begin(), robots_to_this_gate.end(),
+          [this](int i, int j){return path_lengths[i]<path_lengths[j];});
 
         for(int i=0;i<robots_to_this_gate.size();i++){
           log("Looking for shelfino "+std::to_string(robots_to_this_gate[i]));
@@ -121,7 +124,18 @@ class Coordinator : public rclcpp::Node
             continue;
           }
           auto goal = roadmap_interfaces::action::Evacuate_Goal();
-          goal.delay = i*3.0;
+          if(i > 0){
+            double path_difference = 
+              path_lengths[robots_to_this_gate[i]] - path_lengths[robots_to_this_gate[i-1]];
+            double path_to_safe_distance = SAFE_DISTANCE - path_difference;
+            if(path_to_safe_distance > 0.0){
+              path_lengths[robots_to_this_gate[i]] += path_to_safe_distance;
+              double time_to_wait = (path_to_safe_distance / ROBOT_SPEED);
+              goal.delay = time_to_wait;
+            }
+            
+
+          }
           log("Sending goal.");
           auto goal_options = rclcpp_action::Client<roadmap_interfaces::action::Evacuate>::SendGoalOptions();
           goal_options.result_callback = std::bind(&Coordinator::ending_callback, this, _1);
@@ -130,8 +144,9 @@ class Coordinator : public rclcpp::Node
       }
     }
 
-    void ending_callback(const rclcpp_action::ClientGoalHandle<roadmap_interfaces::action::Evacuate>::WrappedResult& result){
-      log("Results coming");
+    void ending_callback(const 
+      rclcpp_action::ClientGoalHandle<roadmap_interfaces::action::Evacuate>::WrappedResult& result){
+      log("Action evacuate completed.");
       delete_shelfino(result.result->shelfino_id);
       shutdown_shelfino_transform(result.result->shelfino_id);
     }
