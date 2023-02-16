@@ -231,6 +231,7 @@ class RoadmapManager : public rclcpp::Node
     const std::string GATES_TOPIC = "/gate_position";
 
     const std::string COMPUTE_PATH_SERVICE_NAME = "compute_path";
+    const std::string UPDATE_GRAPH_SERVICE_NAME = "update_graph";
 
     const std::string MARKERS_TOPIC = "markers";
     const std::string WIDTHS_TOPIC = "widths";
@@ -247,6 +248,7 @@ class RoadmapManager : public rclcpp::Node
     rclcpp::TimerBase::SharedPtr timer_;
 
     rclcpp::Service<roadmap_interfaces::srv::PathService>::SharedPtr path_service;
+    rclcpp::Service<std_srvs::srv::Empty>::SharedPtr update_graph_service;
 
     std::shared_ptr<geometry_msgs::msg::PolygonStamped> borders_msg;
     std::shared_ptr<obstacles_msgs::msg::ObstacleArrayMsg> obstacles_msg;
@@ -281,6 +283,9 @@ class RoadmapManager : public rclcpp::Node
 
       path_service = this->create_service<roadmap_interfaces::srv::PathService>(
         COMPUTE_PATH_SERVICE_NAME, std::bind(&RoadmapManager::compute_path, this, _1, _2));
+
+      update_graph_service = this->create_service<std_srvs::srv::Empty>(
+        UPDATE_GRAPH_SERVICE_NAME, std::bind(&RoadmapManager::update_voronoi_diagram_service, this, _1, _2));
 
       markers_publisher = this->create_publisher<visualization_msgs::msg::MarkerArray>(
         MARKERS_TOPIC, qos);
@@ -419,6 +424,15 @@ class RoadmapManager : public rclcpp::Node
         err("Failed to call service: "+DUBINS_CALCULATOR_SERVICE);
         return;
       }
+    }
+
+    void update_voronoi_diagram_service(
+      const std::shared_ptr<std_srvs::srv::Empty_Request> request,
+      std::shared_ptr<std_srvs::srv::Empty_Response> response){
+
+      std::vector<geometry_msgs::msg::Polygon> empty;
+      update_voronoi_diagram(empty);
+
     }
 
     bool update_voronoi_diagram(std::vector<geometry_msgs::msg::Polygon> temp_obstacles){

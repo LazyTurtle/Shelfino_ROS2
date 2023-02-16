@@ -29,15 +29,18 @@ class Coordinator : public rclcpp::Node
 
     Coordinator()
     : Node("robot_coordinator"){
-      coordinator_service = this->create_service<std_srvs::srv::Empty>(
-        COORDINATOR_SERVICE, std::bind(&Coordinator::coordinate_unsafe_ecacuation, this, _1, _2));
+      unsafe_coordinator_service = this->create_service<std_srvs::srv::Empty>(
+        UNSAFE_COORDINATOR_SERVICE, std::bind(&Coordinator::coordinate_unsafe_ecacuation, this, _1, _2));
+      safe_coordinator_service = this->create_service<std_srvs::srv::Empty>(
+        SAFE_COORDINATOR_SERVICE, std::bind(&Coordinator::coordinate_safe_evacuation, this, _1, _2));
       
       number_of_gates = get_number_of_gates();
       log("Ready.");
     }
 
   private:
-    const std::string COORDINATOR_SERVICE = "coordinate_evacuation";
+    const std::string UNSAFE_COORDINATOR_SERVICE = "unsafe_coordinate_evacuation";
+    const std::string SAFE_COORDINATOR_SERVICE = "safe_coordinate_evacuation";
     const std::string FIND_BEST_PATH_SERVICE = "find_best_path";
     const std::string EVACUATE_SERVICE = "evacuate";
     const std::string GAZEBO_DELETE_SERVICE = "/delete_entity";
@@ -54,7 +57,7 @@ class Coordinator : public rclcpp::Node
 
     std::vector<rclcpp_action::Client<roadmap_interfaces::action::Evacuate>::SharedPtr> action_clients;
 
-    rclcpp::Service<std_srvs::srv::Empty>::SharedPtr coordinator_service;
+    rclcpp::Service<std_srvs::srv::Empty>::SharedPtr safe_coordinator_service, unsafe_coordinator_service;
 
     void debug(std::string log){
       RCLCPP_DEBUG(this->get_logger(), log.c_str());
@@ -133,8 +136,6 @@ class Coordinator : public rclcpp::Node
               double time_to_wait = (path_to_safe_distance / ROBOT_SPEED);
               goal.delay = time_to_wait;
             }
-            
-
           }
           log("Sending goal.");
           auto goal_options = rclcpp_action::Client<roadmap_interfaces::action::Evacuate>::SendGoalOptions();
