@@ -1,3 +1,25 @@
+# Robot Planning and its application
+
+In order to start a test for that project. Insert the following commands:
+
+`ros2 launch shelfino_utils env_launch.py`
+
+`ros2 launch shelfino_gazebo multi_shelfino.launch.py`
+
+Check if all the shelfino robots have been properly loaded.
+
+`ros2 launch shelfino_navigation multi_shelfino_nav.launch.py`
+
+Startup the navigation node and set the estimated position for all shelfino robots.
+
+Then either:
+
+`ros2 service call /unsafe_coordinate_evacuation std_srvs/srv/Empty {}`
+
+or
+
+`ros2 service call /safe_coordinate_evacuation std_srvs/srv/Empty {}` 
+
 # Shelfino ROS2
 
 <img src="./assets/images/shelfino.png" align="right" alt="shelfino robot" height="280px">
